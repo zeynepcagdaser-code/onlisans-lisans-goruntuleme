@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
@@ -34,6 +35,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="EPDK Ön-Lisans Görüntüleme", version="1.0", lifespan=lifespan)
+# GZip: yanitlari SIKISTIRIR (veriyi DEGISTIRMEZ; tum poligon noktalari birebir
+# korunur, sadece transfer kucuk paket -> hizli). 2.8MB JSON ~400KB'a iner.
+app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
