@@ -127,6 +127,12 @@ def filter_options(db: Session = Depends(get_db)):
     }
 
 
+# GeoJSON onbellegi: agir poligon uretimi (yuz binlerce nokta) HER istekte degil,
+# ayni sorgu icin BIR KEZ hesaplanir. Veriyi DEGISTIRMEZ; sadece tekrar hesabi onler.
+# Surec yeniden baslayinca (yeni deploy) otomatik bosalir -> guncel kalir.
+_GEOJSON_CACHE: dict = {}
+
+
 @router.get("/geojson")
 def facilities_geojson(
     db: Session = Depends(get_db),
@@ -136,6 +142,12 @@ def facilities_geojson(
     search: Optional[str] = None,
     include_polygons: bool = False,
 ):
+    cache_key = (lisans_tipi, il, ilce, kaynak_turu, tesis_turu,
+                 lisans_durumu, search, include_polygons)
+    cached = _GEOJSON_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     q = db.query(Facility).join(License, Facility.license_id == License.id,
                                 isouter=True).options(joinedload(Facility.license))
     q = _apply_filters(q, il=il, ilce=ilce, kaynak_turu=kaynak_turu,
@@ -177,7 +189,10 @@ def facilities_geojson(
                                    "kaynak_turu": f.kaynak_turu,
                                    "_is_turbine": True, "turbin_no": i},
                 })
-    return {"type": "FeatureCollection", "features": features}
+    result = {"type": "FeatureCollection", "features": features}
+    if len(_GEOJSON_CACHE) < 100:      # sinirsiz buyumeyi engelle
+        _GEOJSON_CACHE[cache_key] = result
+    return result
 
 
 @router.get("/export.csv")
