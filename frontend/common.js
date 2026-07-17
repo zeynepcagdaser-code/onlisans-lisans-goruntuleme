@@ -124,12 +124,10 @@ function initSyncBox() {
     <span id="syncBadge" class="badge idle">—</span>
     <span id="syncMsg" class="muted" style="color:#e0f2fe;font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
     <label class="sync-opt" title="Koordinat çekmeden sadece listeyi tamamla (hızlı, WAF'ı tetiklemez)"><input type="checkbox" id="syncListOnly"> Sadece liste</label>
-    <button class="btn ghost" id="syncTestSound" title="Uyarı sesini test et">🔔 Test</button>
     <button class="btn" id="syncStart">Senkronize Et</button>`;
   const badge = box.querySelector("#syncBadge");
   const msg = box.querySelector("#syncMsg");
   const btn = box.querySelector("#syncStart");
-  box.querySelector("#syncTestSound").onclick = () => { unlockAudio(); playAlarm(); };
 
   btn.onclick = async () => {
     const t = getLT();
