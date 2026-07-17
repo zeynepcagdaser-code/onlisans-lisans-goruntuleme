@@ -1,6 +1,8 @@
 """Tesis API'si: filtre + sayfalama + GeoJSON + KMZ + koordinat/CSV indirme."""
 import csv
+import gzip
 import io
+import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -127,10 +129,16 @@ def filter_options(db: Session = Depends(get_db)):
     }
 
 
-# GeoJSON onbellegi: agir poligon uretimi (yuz binlerce nokta) HER istekte degil,
-# ayni sorgu icin BIR KEZ hesaplanir. Veriyi DEGISTIRMEZ; sadece tekrar hesabi onler.
-# Surec yeniden baslayinca (yeni deploy) otomatik bosalir -> guncel kalir.
+# GeoJSON onbellegi: SIKISTIRILMIS (gzip) JSON bytes olarak saklanir. Agir poligon
+# uretimi + JSON serialize + gzip HER istekte degil, ayni sorgu icin BIR KEZ yapilir;
+# sonraki istekler hazir gzip paketi ANINDA doner. Veriyi DEGISTIRMEZ (tum noktalar
+# birebir). Surec yeniden baslayinca (yeni deploy) bosalir -> guncel kalir.
 _GEOJSON_CACHE: dict = {}
+
+
+def _gzip_json(obj) -> bytes:
+    raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return gzip.compress(raw, 5)
 
 
 @router.get("/geojson")
@@ -144,9 +152,10 @@ def facilities_geojson(
 ):
     cache_key = (lisans_tipi, il, ilce, kaynak_turu, tesis_turu,
                  lisans_durumu, search, include_polygons)
-    cached = _GEOJSON_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
+    body = _GEOJSON_CACHE.get(cache_key)
+    if body is not None:
+        return Response(content=body, media_type="application/json",
+                        headers={"Content-Encoding": "gzip"})
 
     q = db.query(Facility).join(License, Facility.license_id == License.id,
                                 isouter=True).options(joinedload(Facility.license))
@@ -189,10 +198,11 @@ def facilities_geojson(
                                    "kaynak_turu": f.kaynak_turu,
                                    "_is_turbine": True, "turbin_no": i},
                 })
-    result = {"type": "FeatureCollection", "features": features}
+    body = _gzip_json({"type": "FeatureCollection", "features": features})
     if len(_GEOJSON_CACHE) < 100:      # sinirsiz buyumeyi engelle
-        _GEOJSON_CACHE[cache_key] = result
-    return result
+        _GEOJSON_CACHE[cache_key] = body
+    return Response(content=body, media_type="application/json",
+                    headers={"Content-Encoding": "gzip"})
 
 
 @router.get("/export.csv")
