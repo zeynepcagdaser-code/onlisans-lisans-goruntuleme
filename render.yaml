@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: epdk-goruntuleme
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements-web.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: SCHEDULER_ENABLED
+        value: "false"

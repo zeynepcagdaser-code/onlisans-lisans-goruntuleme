@@ -1,0 +1,50 @@
+KOORDINATSIZ TESISLER — Toplam: 7
+======================================================================
+1. BEYNAM DEPOLAMALI GES-1
+   Il/Ilce   : ANKARA / BALA
+   Kaynak    : Ana Kaynak
+   Lisans No : ÖN/11931-23/05654
+   Unvan     : ENERJİSA MÜŞTERİ ÇÖZÜMLERİ ANONİM ŞİRKETİ
+   Durum     : yok
+
+2. GÖRELE REG VE HES
+   Il/Ilce   : GİRESUN / ÇANAKÇI
+   Kaynak    : Ana Kaynak
+   Lisans No : ÖN/9288-4/04485
+   Unvan     : KAVUKLU ELEKTRİK ÜRETİM İNŞAAT VE TİCARET ANONİM ŞİRKETİ
+   Durum     : beklemede
+
+3. KIZILCA REG. VE HES
+   Il/Ilce   : MERSİN / GÜLNAR
+   Kaynak    : Ana Kaynak
+   Lisans No : ÖN/7475-7/03808
+   Unvan     : HAS ENERJİ ÜRETİM İLETİM VE TİCARET ANONİM ŞİRKETİ
+   Durum     : beklemede
+
+4. MELEN HES
+   Il/Ilce   : SAKARYA / KOCAALİ
+   Kaynak    : Ana Kaynak
+   Lisans No : ÖN/6467-6/03563
+   Unvan     : İSTANBUL ENERJİ SANAYİ VE TİCARET ANONİM ŞİRKETİ
+   Durum     : beklemede
+
+5. YENİ SUŞEHRİ HES
+   Il/Ilce   : SİVAS / SUŞEHRİ
+   Kaynak    : Ana Kaynak
+   Lisans No : ÖN/7239-18/03748
+   Unvan     : TUFAN ENERJİ İNŞAAT TAAHHÜT SANAYİ VE TİCARET A.Ş.
+   Durum     : beklemede
+
+6. ŞEMDİNLİ BARAJI VE HES
+   Il/Ilce   : HAKKARİ / ŞEMDİNLİ
+   Kaynak    : Ana Kaynak
+   Lisans No : ÖN/5006-16/02998
+   Unvan     : REİS GRUP ENERJİ ELE KT.ÜRET.İTH.İHR. SANAYİ VE TİCARET ANONİM ŞİRKETİ
+   Durum     : beklemede
+
+7. ŞEMDİNLİ REG. VE HES
+   Il/Ilce   : HAKKARİ / ŞEMDİNLİ
+   Kaynak    : Ana Kaynak
+   Lisans No : ÖN/6558-6/03588
+   Unvan     : MİRAN ENERJİ ELEKTRİK ÜRETİM ANONİM ŞİRKETİ
+   Durum     : beklemede

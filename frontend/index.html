@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EPDK Ön-Lisans — Tablo</title>
+  <link rel="stylesheet" href="/static/style.css?v=4" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>EPDK Lisans Görüntüleme</h1>
+    <nav>
+      <a href="/" class="active">Tablo</a>
+      <a href="/harita">Harita</a>
+    </nav>
+    <div class="lt-toggle" id="ltToggle" title="Lisans tipi"></div>
+    <div class="spacer"></div>
+    <div class="sync-box" id="syncBox"></div>
+  </header>
+
+  <div class="wrap">
+    <div class="stat-row" id="statRow"></div>
+
+    <div class="filters" id="filters">
+      <div class="fld"><label>Ara</label><input id="f_search" placeholder="Unvan / Tesis / Lisans No / İl" /></div>
+      <div class="fld"><label>İl</label><select id="f_il"><option value="">Hepsi</option></select></div>
+      <div class="fld"><label>İlçe</label><select id="f_ilce"><option value="">Hepsi</option></select></div>
+      <div class="fld"><label>Kaynak Türü</label><select id="f_kaynak"><option value="">Hepsi</option></select></div>
+      <div class="fld"><label>Tesis Türü</label><select id="f_tesis"><option value="">Hepsi</option></select></div>
+      <div class="fld"><label>Lisans Durumu</label><select id="f_durum"><option value="">Hepsi</option></select></div>
+      <div class="fld"><label>&nbsp;</label><label style="text-transform:none;font-weight:400;color:var(--ink)"><input type="checkbox" id="f_coords" /> Sadece koordinatlı</label></div>
+      <div class="fld"><label>&nbsp;</label><button class="btn" style="background:var(--head);color:#fff" id="btnExport">CSV / Excel İndir</button></div>
+    </div>
+
+    <div class="tablecard">
+      <div class="table-scroll">
+        <table class="grid" id="grid">
+          <thead><tr id="head"></tr></thead>
+          <tbody id="body"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <span class="muted" id="pageInfo"></span>
+        <select id="pageSize"><option>25</option><option selected>50</option><option>100</option><option>200</option></select>
+        <button id="prev">‹ Önceki</button>
+        <button id="next">Sonraki ›</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/common.js?v=4"></script>
+  <script src="/static/app.js?v=4"></script>
+</body>
+</html>

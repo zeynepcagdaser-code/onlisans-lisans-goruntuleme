@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Teshis/gecici ciktilar
+backend/teshis/
+poc/
+
+# Ortam
+.env
+backend/.env
+
+# SQLite yardimci dosyalar (ana .db DAHIL edilir; bunlar checkpoint sonrasi gereksiz)
+*.db-shm
+*.db-wal
+
+# Playwright
+.playwright/

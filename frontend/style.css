@@ -1,0 +1,90 @@
+:root {
+  --bg: #f4f6f8; --panel: #ffffff; --ink: #1f2937; --muted: #6b7280;
+  --line: #e5e7eb; --accent: #0e7490; --accent2: #0891b2;
+  --head: #0f7285; --head2: #0b5563;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  background: var(--bg); color: var(--ink); font-size: 14px;
+}
+header.topbar {
+  background: linear-gradient(90deg, var(--head), var(--head2));
+  color: #fff; padding: 10px 18px; display: flex; align-items: center; gap: 20px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+}
+header.topbar h1 { font-size: 17px; margin: 0; font-weight: 600; }
+header.topbar nav a {
+  color: #e0f2fe; text-decoration: none; margin-right: 14px; font-weight: 500;
+  padding: 4px 8px; border-radius: 6px;
+}
+header.topbar nav a.active, header.topbar nav a:hover { background: rgba(255,255,255,.18); color:#fff; }
+.spacer { flex: 1; }
+
+.sync-box { display: flex; align-items: center; gap: 10px; }
+.badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; background:#334155; }
+.badge.idle { background:#475569; } .badge.waiting_captcha { background:#d97706; }
+.badge.scraping { background:#2563eb; } .badge.success { background:#16a34a; }
+.badge.failed { background:#dc2626; } .badge.partial { background:#ca8a04; }
+.badge.skipped_no_captcha { background:#6b7280; }
+button.btn {
+  background:#fff; color:var(--head2); border:none; padding:7px 14px; border-radius:7px;
+  font-weight:600; cursor:pointer; font-size:13px;
+}
+button.btn:hover { background:#e0f2fe; }
+button.btn.ghost { background:transparent; color:#fff; border:1px solid rgba(255,255,255,.5); }
+
+.wrap { padding: 16px 18px; }
+.filters {
+  background: var(--panel); border:1px solid var(--line); border-radius:10px;
+  padding:12px; display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin-bottom:14px;
+}
+.filters .fld { display:flex; flex-direction:column; gap:4px; }
+.filters label { font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+.filters input, .filters select {
+  padding:7px 9px; border:1px solid var(--line); border-radius:7px; font-size:13px; min-width:140px; background:#fff;
+}
+.filters input:focus, .filters select:focus { outline:2px solid var(--accent2); border-color:var(--accent2); }
+
+.stat-row { display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.stat { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 16px; }
+.stat .n { font-size:20px; font-weight:700; color:var(--head2); }
+.stat .l { font-size:11px; color:var(--muted); text-transform:uppercase; }
+
+.tablecard { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+.table-scroll { overflow-x:auto; }
+table.grid { border-collapse:collapse; width:100%; font-size:13px; }
+table.grid thead th {
+  background:linear-gradient(180deg,#0f7285,#0b5563); color:#fff; padding:9px 10px; text-align:left;
+  white-space:nowrap; cursor:pointer; position:sticky; top:0; user-select:none;
+}
+table.grid thead th:hover { background:#0b5563; }
+table.grid th .arrow { opacity:.6; font-size:10px; }
+table.grid tbody td { padding:7px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+table.grid tbody tr:nth-child(even) { background:#f9fafb; }
+table.grid tbody tr:hover { background:#ecfeff; }
+.dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+.pill { font-size:11px; padding:1px 7px; border-radius:10px; background:#e5e7eb; color:#374151; }
+.pill.ok { background:#dcfce7; color:#166534; } .pill.yok { background:#f3f4f6; color:#6b7280; }
+.pill.supheli { background:#fef9c3; color:#854d0e; } .pill.hata { background:#fee2e2; color:#991b1b; }
+.pill.beklemede { background:#e0e7ff; color:#3730a3; }
+
+.pager { display:flex; align-items:center; gap:10px; padding:10px 12px; justify-content:flex-end; }
+.pager button { padding:5px 11px; border:1px solid var(--line); background:#fff; border-radius:6px; cursor:pointer; }
+.pager button:disabled { opacity:.4; cursor:default; }
+.muted { color:var(--muted); }
+a.link { color:var(--accent); cursor:pointer; text-decoration:none; }
+a.link:hover { text-decoration:underline; }
+#toast { position:fixed; bottom:20px; right:20px; background:#111827; color:#fff; padding:10px 16px; border-radius:8px; opacity:0; transition:opacity .3s; z-index:9999; }
+#toast.show { opacity:.95; }
+
+/* Lisans tipi gecis dugmeleri (Onlisans / Uretim) */
+.lt-toggle { display:inline-flex; gap:2px; background:rgba(255,255,255,.12); padding:3px; border-radius:8px; margin-left:6px; }
+.lt-btn { border:none; background:transparent; color:#e0f2fe; font-size:13px; font-weight:600; padding:5px 12px; border-radius:6px; cursor:pointer; white-space:nowrap; }
+.lt-btn:hover { background:rgba(255,255,255,.10); }
+.lt-btn.active { background:#fff; color:#0369a1; }
+.stat.muted2 { opacity:.7; }
+
+/* Sadece-liste onay kutusu (sync kutusunda) */
+.sync-opt { display:inline-flex; align-items:center; gap:4px; color:#e0f2fe; font-size:12px; white-space:nowrap; cursor:pointer; }
+.sync-opt input { cursor:pointer; }

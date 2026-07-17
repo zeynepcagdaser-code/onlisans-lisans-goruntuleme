@@ -1,0 +1,26 @@
+EPDK LİSANS GÖRÜNTÜLEME — NASIL BAŞLATILIR
+===========================================
+
+1) Sunucuyu başlat:
+   - "ÖNLİSANS GÖRÜNTÜLEME UYGULAMASI" klasöründe komut istemi / PowerShell aç
+   - Şunu yaz:
+        cd backend
+        python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+2) Tarayıcıda aç:
+        http://127.0.0.1:8000
+   (Değişiklikler görünmezse Ctrl+F5)
+
+3) Kullanım:
+   - Başlıktaki [Önlisans | Lisans] düğmesiyle tip seç
+   - Tablo / Harita / CSV indir
+   - Veri çekmek: "Senkronize Et" -> açılan pencerede captcha çöz + Sorgula, gerisi otomatik
+     * "Sadece liste" kutusu: koordinat çekmeden hızlıca listeyi tamamlar
+     * Blok gelirse kendi bekler; uzun sürerse "partial" durup sonra devam eder
+     * Farklı IP (telefon hotspot) = taze çekim bütçesi
+
+DURUM (2026-07-14):
+   - Önlisan: 704 tesis, 698 koordinatlı  (TAMAM)
+   - Üretim : 680 tesis, 352 koordinatlı  (liste 1974'ten eksik, koordinat devam ediyor)
+
+VERİ: backend/data/epdk.db  (SQLite — güvende, kalıcı)

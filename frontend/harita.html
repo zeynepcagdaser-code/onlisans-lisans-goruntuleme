@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EPDK Ön-Lisans — Harita</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="/static/style.css?v=5" />
+  <style>
+    html, body { height: 100%; }
+    #map { position: absolute; top: 52px; bottom: 0; left: 0; right: 0; }
+    .legend {
+      position: absolute; bottom: 22px; right: 12px; z-index: 1000; background: #fff;
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.15); max-height: 60vh; overflow: auto;
+    }
+    .legend h4 { margin: 0 0 6px; font-size: 12px; }
+    .legend .row { display: flex; align-items: center; gap: 7px; cursor: pointer; padding: 2px 0; }
+    .legend .row.off { opacity: .35; text-decoration: line-through; }
+    .legend .sw { width: 13px; height: 13px; border-radius: 50%; }
+    .mapfilters {
+      position: absolute; top: 62px; left: 12px; z-index: 1000; background: #fff;
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; gap: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.12); flex-wrap: wrap; max-width: 70vw;
+    }
+    .mapfilters select, .mapfilters input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; }
+    .card { min-width: 240px; font-size: 13px; }
+    .card .hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .card h3 { margin: 0 0 4px; font-size: 14px; }
+    .card table td { padding: 1px 4px; vertical-align: top; }
+    .card td.k { color: var(--muted); white-space: nowrap; }
+    .kebab { position: relative; }
+    .kebab .dots { cursor: pointer; font-size: 18px; padding: 0 4px; color: var(--muted); border: none; background: none; }
+    .kebab .menu { position: absolute; right: 0; top: 22px; background: #fff; border: 1px solid var(--line);
+      border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.18); display: none; z-index: 5; min-width: 200px; }
+    .kebab .menu.open { display: block; }
+    .kebab .menu a { display: block; padding: 8px 12px; color: var(--ink); text-decoration: none; cursor: pointer; }
+    .kebab .menu a:hover { background: #ecfeff; }
+    .count-pill { position: absolute; top: 62px; right: 12px; z-index: 1000; background: var(--head2); color: #fff;
+      padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <h1>EPDK Lisans Görüntüleme</h1>
+    <nav>
+      <a href="/">Tablo</a>
+      <a href="/harita" class="active">Harita</a>
+    </nav>
+    <div class="lt-toggle" id="ltToggle" title="Lisans tipi"></div>
+    <div class="spacer"></div>
+    <div class="sync-box" id="syncBox"></div>
+  </header>
+
+  <div class="mapfilters">
+    <input id="m_search" placeholder="Ara (unvan/tesis/il)" />
+    <select id="m_il"><option value="">İl: Hepsi</option></select>
+    <select id="m_tesis"><option value="">Tesis Türü: Hepsi</option></select>
+    <label style="font-size:12px;display:flex;align-items:center;gap:5px"><input type="checkbox" id="m_poly" /> Poligonlar</label>
+  </div>
+  <div class="count-pill" id="countPill">—</div>
+  <div id="map"></div>
+  <div class="legend" id="legend"><h4>Kaynak Türü</h4></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="/static/common.js?v=5"></script>
+  <script src="/static/map.js?v=5"></script>
+</body>
+</html>
