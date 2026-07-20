@@ -168,11 +168,46 @@ def split_rings(polygon_wgs84, ham_tm3):
     return rings
 
 
-def process_polygon(raw_points, datum: str = None):
+def _saglam_en(E, N):
+    """Ham E/N Turkiye TM araliginda mi? EPDK placeholder (1, 111111, 333333,
+    1111111 vb.) ve bos degerler elenir."""
+    try:
+        return E is not None and N is not None and 150000 < E < 850000 and 4000000 < N < 4700000
+    except TypeError:
+        return False
+
+
+def duzelt_noktalar(pts, il):
+    """EPDK'nin yanlis/karisik dilim etiketini ve placeholder koordinatlari duzelt.
+      1. Placeholder/bozuk E/N noktalarini ATAR.
+      2. Kalan her noktayi, tesisin ILINE en yakin dusuren dilimle yeniden etiketler.
+    il referansi bulunamazsa dilim'e dokunmaz (sadece placeholder eler).
+    Doner: temizlenmis+dogru-dilimli nokta listesi (bos = gecerli koordinat yok)."""
+    from .il_koord import il_ref
+    temiz = [dict(p) for p in (pts or []) if _saglam_en(p.get("E"), p.get("N"))]
+    if not temiz:
+        return []
+    ref = il_ref(il) if il else None
+    if ref:
+        for p in temiz:
+            best_m, best_d = None, 1e9
+            for m in sorted(VALID_MERIDIANS):
+                lat, lng = tm_to_wgs84(m, p["E"], p["N"])
+                d = ((lat - ref[0]) ** 2 + (lng - ref[1]) ** 2) ** 0.5
+                if d < best_d:
+                    best_d, best_m = d, m
+            p["meridian"] = best_m
+    return temiz
+
+
+def process_polygon(raw_points, datum: str = None, il: str = None):
     """
     raw_points: [{'ad':.., 'meridian':int, 'E':float, 'N':float}, ...]
+    il verilirse: yanlis EPDK dilim etiketi + placeholder koordinatlar duzeltilir.
     polygon_wgs84 = HALKA LISTESI [[[lat,lng],...],...] (tek/cok-parcali dogru kurulmus).
     """
+    if il:
+        raw_points = duzelt_noktalar(raw_points, il)
     rings = build_rings(raw_points)
     meridian = next((int(p["meridian"]) for p in raw_points
                      if p.get("meridian") is not None), None)

@@ -82,11 +82,12 @@ def main():
             saha_pts = saha
             turbin_pts = [p for s in turbin_setleri for p in s]
 
+            from app.coords import duzelt_noktalar
             res = process_polygon([{"meridian": p["meridian"], "E": p["E"],
-                                    "N": p["N"], "ad": p["ad"]} for p in saha_pts])
+                                    "N": p["N"], "ad": p["ad"]} for p in saha_pts], il=il)
             # turbin noktalarini WGS84'e cevir (poligon degil, ayri nokta)
             turbin_wgs = []
-            for p in turbin_pts:
+            for p in duzelt_noktalar(turbin_pts, il):
                 la, ln = tm_to_wgs84(p["meridian"], p["E"], p["N"])
                 turbin_wgs.append([round(la, 6), round(ln, 6)])
 

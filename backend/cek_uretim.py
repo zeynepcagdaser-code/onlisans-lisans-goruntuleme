@@ -38,11 +38,13 @@ def log(m):
 
 
 def _save_coords(db, fo, saha_pts, turbin_pts):
-    """saha_pts -> SAHA poligonu; turbin_pts -> ayri TURBIN noktalari (poligon degil)."""
+    """saha_pts -> SAHA poligonu; turbin_pts -> ayri TURBIN noktalari (poligon degil).
+    process_polygon'a il verilir -> yanlis EPDK dilim etiketi + placeholder DUZELIR."""
+    from app.coords import duzelt_noktalar
     res = process_polygon([{"meridian": p["meridian"], "E": p["E"],
-                            "N": p["N"], "ad": p["ad"]} for p in saha_pts])
+                            "N": p["N"], "ad": p["ad"]} for p in saha_pts], il=fo.il)
     turbin_wgs = []
-    for p in turbin_pts:
+    for p in duzelt_noktalar(turbin_pts, fo.il):
         la, ln = tm_to_wgs84(p["meridian"], p["E"], p["N"])
         turbin_wgs.append([round(la, 6), round(ln, 6)])
     fo.dilim_meridyeni = res["meridian"]
