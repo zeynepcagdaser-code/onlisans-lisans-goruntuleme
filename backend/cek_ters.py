@@ -78,6 +78,12 @@ def main():
         sc.goto_page(page)
         lics = sc.parse_current_page()
         log(f"--- Sayfa {page}/{total_pg} ({len(lics)} lisans) [OK={done_ok} yok={done_yok}] ---")
+        # KRITIK: 0 lisans = WAF liste vermedi (sayfa yuklenemedi). Bu sayfayi
+        # 'tamamlandi' SAYMA (yoksa gercek tesisler atlanir/kaybolur). DUR.
+        if not lics:
+            log(f"[!] Sayfa {page}: 0 lisans (WAF liste vermedi). DURULUYOR - bu sayfa "
+                f"TAMAMLANMADI. Taze IP ile yeniden baslatinca sayfa {page}'den devam eder.")
+            sc.close(); db.close(); return
         reauth_oldu = False
         for lic in lics:
             if reauth_oldu:
