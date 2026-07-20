@@ -87,8 +87,10 @@ function render() {
     } else if (feat.geometry.type === "Polygon") {
       if (disabledKaynak.has(trUpper(p.kaynak_turu))) continue;
       const ring = feat.geometry.coordinates[0].map(([lng, lat]) => [lat, lng]);
+      // Poligon rengi LISANS TIPINE gore: uretim (Lisans) YESIL, onlisan GRI.
+      const renk = p.lisans_tipi === "uretim" ? "#16a34a" : "#9ca3af";
       polyLayer.addLayer(L.polygon(ring, {
-        color: colorFor(p.kaynak_turu), weight: 2, fillOpacity: 0.15,
+        color: renk, weight: 2, fillOpacity: 0.15,
       }));
     }
   }
@@ -121,7 +123,9 @@ function query() {
   const il = document.getElementById("m_il").value; if (il) p.set("il", il);
   const tt = document.getElementById("m_tesis").value; if (tt) p.set("tesis_turu", tt);
   if (document.getElementById("m_poly").checked) p.set("include_polygons", "true");
-  p.set("lisans_tipi", getLT());
+  // 'hepsi' modunda lisans_tipi GONDERME -> backend her iki tipi doner.
+  const lt = getLT();
+  if (lt !== "hepsi") p.set("lisans_tipi", lt);
   return p.toString();
 }
 

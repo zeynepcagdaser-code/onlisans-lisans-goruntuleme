@@ -183,7 +183,8 @@ def facilities_geojson(
                     "type": "Feature",
                     "geometry": {"type": "Polygon", "coordinates": [ring]},
                     "properties": {"id": f.id, "tesis_adi": f.tesis_adi,
-                                   "kaynak_turu": f.kaynak_turu, "_is_polygon": True},
+                                   "kaynak_turu": f.kaynak_turu, "_is_polygon": True,
+                                   "lisans_tipi": f.license.lisans_tipi if f.license else None},
                 })
         # TURBIN noktalari: poligon DEGIL; her biri ayri isaret (Point + _is_turbine)
         if f.turbine_points:

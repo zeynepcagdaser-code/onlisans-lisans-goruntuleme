@@ -1,11 +1,16 @@
 // Ortak: renk paleti, senkron kutusu, toast, yardimcilar.
 const API = "";
 
-// --- Lisans tipi (onlisan | uretim) - tum sayfalarda paylasilir ---
+// --- Lisans tipi (onlisan | uretim | hepsi) - tum sayfalarda paylasilir ---
+// 'hepsi' = onlisan + uretim birlikte (lisans_tipi filtresi gonderilmez).
 function getLT() { return localStorage.getItem("lisans_tipi") || "onlisan"; }
-function setLT(t) { localStorage.setItem("lisans_tipi", t === "uretim" ? "uretim" : "onlisan"); }
-function ltParam() { return "lisans_tipi=" + getLT(); }
-const LT_LABEL = { onlisan: "Önlisans", uretim: "Lisans" };
+function setLT(t) {
+  const v = (t === "uretim" || t === "hepsi") ? t : "onlisan";
+  localStorage.setItem("lisans_tipi", v);
+}
+// 'hepsi' modunda backend'e lisans_tipi GONDERME -> her iki tip doner.
+function ltParam() { const t = getLT(); return t === "hepsi" ? "" : "lisans_tipi=" + t; }
+const LT_LABEL = { onlisan: "Önlisans", uretim: "Lisans", hepsi: "Önlisans + Lisans" };
 
 // Basliğa/araca yerlestirilecek gecis dugmeleri. onChange -> veriyi yeniden yukle.
 function initLTToggle(onChange) {
@@ -13,7 +18,7 @@ function initLTToggle(onChange) {
   if (!el) return;
   function render() {
     const cur = getLT();
-    el.innerHTML = ["onlisan", "uretim"].map(t =>
+    el.innerHTML = ["onlisan", "uretim", "hepsi"].map(t =>
       `<button class="lt-btn${t === cur ? " active" : ""}" data-t="${t}">${LT_LABEL[t]}</button>`
     ).join("");
     el.querySelectorAll(".lt-btn").forEach(b => b.onclick = () => {
