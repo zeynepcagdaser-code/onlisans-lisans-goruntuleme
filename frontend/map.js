@@ -117,22 +117,40 @@ function buildLegend() {
   });
 }
 
-function query() {
+function query(ltOverride) {
   const p = new URLSearchParams();
   const s = document.getElementById("m_search").value; if (s) p.set("search", s);
   const il = document.getElementById("m_il").value; if (il) p.set("il", il);
   const tt = document.getElementById("m_tesis").value; if (tt) p.set("tesis_turu", tt);
   if (document.getElementById("m_poly").checked) p.set("include_polygons", "true");
-  // 'hepsi' modunda lisans_tipi GONDERME -> backend her iki tipi doner.
-  const lt = getLT();
-  if (lt !== "hepsi") p.set("lisans_tipi", lt);
+  if (ltOverride) p.set("lisans_tipi", ltOverride);
   return p.toString();
+}
+
+// Soguk onbellekte agir poligon yaniti uretilirken Render proxy'si ~30s'de 502
+// dönebilir; backend arka planda bitirip onbellege alir -> tek sessiz tekrar yeter.
+async function getGeo(qs) {
+  const url = API + "/api/facilities/geojson?" + qs;
+  try { return await getJSON(url); }
+  catch (e) { await new Promise(r => setTimeout(r, 2500)); return getJSON(url); }
 }
 
 async function loadData() {
   document.getElementById("countPill").textContent = "yükleniyor…";
-  const gj = await getJSON(API + "/api/facilities/geojson?" + query());
-  allFeatures = gj.features || [];
+  const lt = getLT();
+  let features;
+  if (lt === "hepsi") {
+    // TEK birlesik dev istek (her iki tip birlikte) ucretsiz sunucuda cok agir:
+    // poligonlar bellek/zaman siniri asip worker'i cokertiyor (502). Her tipi
+    // AYRI (hafif + onbeleklenebilir) + SIRALI cek (peak bellek dusuk) -> birlestir.
+    const a = await getGeo(query("onlisan"));
+    const b = await getGeo(query("uretim"));
+    features = (a.features || []).concat(b.features || []);
+  } else {
+    const gj = await getGeo(query(lt));
+    features = gj.features || [];
+  }
+  allFeatures = features;
   buildLegend(); render();
   if (document.getElementById("m_poly").checked) map.addLayer(polyLayer);
   else map.removeLayer(polyLayer);
