@@ -3,11 +3,12 @@ import csv
 import gzip
 import io
 import json
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..coords import tm_to_wgs84
@@ -132,13 +133,46 @@ def filter_options(db: Session = Depends(get_db)):
 # GeoJSON onbellegi: SIKISTIRILMIS (gzip) JSON bytes olarak saklanir. Agir poligon
 # uretimi + JSON serialize + gzip HER istekte degil, ayni sorgu icin BIR KEZ yapilir;
 # sonraki istekler hazir gzip paketi ANINDA doner. Veriyi DEGISTIRMEZ (tum noktalar
-# birebir). Surec yeniden baslayinca (yeni deploy) bosalir -> guncel kalir.
+# birebir).
 _GEOJSON_CACHE: dict = {}
+
+# DISK onbellegi: ucretsiz sunucuda (throttle CPU) agir poligon paketi uretimi 13-22s
+# surer ve worker her yeniden baslayinca BELLEK onbellegi silinir -> her seferinde
+# bastan uretim (yavas/502). Cozum: filtresiz butun-veri gorunumlerinin gzip paketini
+# DISKE yaz; sonraki isteklerde (yeniden baslasa bile) dosyadan ANINDA oku. Dosya adina
+# DB imzasi (koordinatli tesis sayisi + max id) gomulur -> veri degisince otomatik
+# gecersizlesir (eski dosya adi tutmaz -> yeniden uretilir). Onceden uretilip commit'lenen
+# dosyalar deploy'da hazir gelir -> canli site ILK istekte bile aninda yanit verir.
+_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "data",
+                          "geojson_cache")
+_DB_SIG = None
 
 
 def _gzip_json(obj) -> bytes:
     raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return gzip.compress(raw, 5)
+
+
+def _db_sig(db: Session) -> str:
+    """DB icerik imzasi (koordinatli-aktif tesis sayisi + max id). Salt-okunur sunucuda
+    surec omru boyunca sabit -> bir kez hesaplanip saklanir."""
+    global _DB_SIG
+    if _DB_SIG is None:
+        n = (db.query(func.count(Facility.id))
+             .filter(Facility.centroid_lat.isnot(None)).scalar()) or 0
+        mx = db.query(func.max(Facility.id)).scalar() or 0
+        _DB_SIG = f"{n}-{mx}"
+    return _DB_SIG
+
+
+def _disk_file(cache_key, sig):
+    """Sadece FILTRESIZ butun-veri gorunumleri (lisans_tipi + poligon disinda hepsi bos)
+    icin disk yolu; aksi halde None (filtreli sorgular diske yazilmaz)."""
+    lisans_tipi, il, ilce, kaynak_turu, tesis_turu, lisans_durumu, search, inc = cache_key
+    if any((il, ilce, kaynak_turu, tesis_turu, lisans_durumu, search)):
+        return None
+    ad = f"{lisans_tipi or 'hepsi'}_{'poly' if inc else 'pts'}__{sig}.gz"
+    return os.path.join(_CACHE_DIR, ad)
 
 
 @router.get("/geojson")
@@ -156,6 +190,19 @@ def facilities_geojson(
     if body is not None:
         return Response(content=body, media_type="application/json",
                         headers={"Content-Encoding": "gzip"})
+
+    # DISK onbellegi: filtresiz butun-veri gorunumu ise (yeniden baslamaya dayanikli)
+    disk = _disk_file(cache_key, _db_sig(db))
+    if disk and os.path.exists(disk):
+        try:
+            with open(disk, "rb") as fh:
+                body = fh.read()
+            if len(_GEOJSON_CACHE) < 100:
+                _GEOJSON_CACHE[cache_key] = body
+            return Response(content=body, media_type="application/json",
+                            headers={"Content-Encoding": "gzip"})
+        except Exception:
+            pass
 
     q = db.query(Facility).join(License, Facility.license_id == License.id,
                                 isouter=True).options(joinedload(Facility.license))
@@ -202,6 +249,17 @@ def facilities_geojson(
     body = _gzip_json({"type": "FeatureCollection", "features": features})
     if len(_GEOJSON_CACHE) < 100:      # sinirsiz buyumeyi engelle
         _GEOJSON_CACHE[cache_key] = body
+    # Filtresiz butun-veri gorunumunu diske de yaz (ayni deploy icinde yeniden
+    # baslamaya dayanikli; commit'lenirse deploy'da hazir gelir).
+    if disk:
+        try:
+            os.makedirs(_CACHE_DIR, exist_ok=True)
+            tmp = disk + ".tmp"
+            with open(tmp, "wb") as fh:
+                fh.write(body)
+            os.replace(tmp, disk)
+        except Exception:
+            pass
     return Response(content=body, media_type="application/json",
                     headers={"Content-Encoding": "gzip"})
 
