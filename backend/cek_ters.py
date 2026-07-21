@@ -114,6 +114,15 @@ def main():
                     reauth_oldu = True
                     break
                 if hata:
+                    # WAF (erisim engellendi) = IP olmus. Bu tesisi atlayip DEVAM edersek
+                    # sayfadaki geri kalan tesisler de WAF'a takilip atlanir ve sayfa yine
+                    # "tamamlandi" isaretlenir -> cekilmemis tesisler SONSUZA kaybolur.
+                    # Bu yuzden WAF gorunce DUR: sayfa TAMAMLANMADI, taze IP ile bu
+                    # sayfadan (cekilenler atlanarak) devam edilir.
+                    if "WAF" in hata or "engellendi" in hata.lower():
+                        log(f"[!] WAF (erisim engellendi): {fac.get('tesis_adi')}. DURULUYOR "
+                            f"- sayfa {page} TAMAMLANMADI. Taze IP ile sayfa {page}'den devam eder.")
+                        sc.close(); db.close(); return
                     log(f"    [HATA-atlandi] {fac.get('tesis_adi')}: {hata}"); continue
                 if not sets:
                     fo.koordinat_durumu = "koordinat_yok_teyitli"
