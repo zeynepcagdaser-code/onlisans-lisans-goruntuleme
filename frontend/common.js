@@ -122,9 +122,16 @@ async function getJSON(url) {
 }
 
 // --- Senkron kontrol kutusu (her sayfada) ---
-function initSyncBox() {
+async function initSyncBox() {
   const box = document.getElementById("syncBox");
   if (!box) return;
+  // 'Senkronize Et' YALNIZCA LOKALDE calisir: captcha'yi insan gorunur tarayicida
+  // cozer. Bulutta Playwright yok -> scraper router yuklenmez -> /api/sync/* 404.
+  // Endpoint yoksa (canli site) senkron kutusunu HIC gosterme.
+  try {
+    const r = await fetch(API + "/api/sync/status");
+    if (!r.ok) { box.style.display = "none"; return; }
+  } catch (e) { box.style.display = "none"; return; }
   box.innerHTML = `
     <span id="syncBadge" class="badge idle">—</span>
     <span id="syncMsg" class="muted" style="color:#e0f2fe;font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
