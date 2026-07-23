@@ -40,6 +40,32 @@
     .kebab .menu a:hover { background: #ecfeff; }
     .count-pill { position: absolute; top: 62px; right: 12px; z-index: 1000; background: var(--head2); color: #fff;
       padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+    /* Koordinat Ekle butonu + modal */
+    .coord-add-btn { background: #16a34a; color: #fff; border: none; border-radius: 7px; padding: 7px 12px;
+      font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .coord-add-btn:hover { background: #15803d; }
+    .modal-ovl { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 3000; display: none;
+      align-items: flex-start; justify-content: center; overflow: auto; padding: 24px 12px; }
+    .modal-ovl.open { display: flex; }
+    .modal { background: #fff; border-radius: 12px; width: 640px; max-width: 96vw; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+    .modal-hd { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .modal-hd h2 { margin: 0; font-size: 16px; }
+    .modal-hd .x { border: none; background: none; font-size: 22px; cursor: pointer; color: var(--muted); line-height: 1; }
+    .modal-bd { padding: 16px 18px; }
+    .modal-bd label.fld { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; font-weight: 600; }
+    .modal-bd input[type=text], .modal-bd select, .modal-bd textarea {
+      width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; font-size: 13px; box-sizing: border-box; }
+    .modal-bd textarea { min-height: 120px; font-family: monospace; font-size: 12px; resize: vertical; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .radio-row { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; margin-top: 3px; }
+    .radio-row label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    .sec-box { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; margin-top: 12px; }
+    .sec-box > label.head { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 13px; cursor: pointer; color: var(--ink); }
+    .modal-ft { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); }
+    .modal-ft .msg { font-size: 12px; }
+    .modal-ft button.save { background: var(--head2); color: #fff; border: none; border-radius: 8px; padding: 9px 20px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .hint { font-size: 11px; color: var(--muted); margin: 2px 0 0; }
   </style>
 </head>
 <body>
@@ -50,6 +76,7 @@
       <a href="/harita" class="active">Harita</a>
     </nav>
     <div class="lt-toggle" id="ltToggle" title="Lisans tipi"></div>
+    <button class="coord-add-btn" id="coordAddBtn" style="display:none">➕ Koordinat Ekle</button>
     <div class="spacer"></div>
     <div class="sync-box" id="syncBox"></div>
   </header>
@@ -64,9 +91,73 @@
   <div id="map"></div>
   <div class="legend" id="legend"><h4>Kaynak Türü</h4></div>
 
+  <!-- Koordinat Ekle modal -->
+  <div class="modal-ovl" id="coordModal">
+    <div class="modal">
+      <div class="modal-hd">
+        <h2>➕ Manuel Koordinat Ekle</h2>
+        <button class="x" id="coordModalX">×</button>
+      </div>
+      <div class="modal-bd">
+        <div class="grid2">
+          <div><label class="fld">Tesis Adı *</label><input type="text" id="ca_ad" placeholder="ör. YAYLAKÖY RES" /></div>
+          <div><label class="fld">Kaynak Türü</label>
+            <select id="ca_kaynak">
+              <option value="">Seçiniz…</option>
+              <option>RÜZGAR</option><option>GÜNEŞ</option><option>HİDROELEKTRİK</option>
+              <option>JEOTERMAL</option><option>BİYOKÜTLE</option><option>TERMİK</option><option>NÜKLEER</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid3">
+          <div><label class="fld">İl</label><input type="text" id="ca_il" placeholder="ör. İZMİR" /></div>
+          <div><label class="fld">İlçe</label><input type="text" id="ca_ilce" placeholder="ör. KARABURUN" /></div>
+          <div><label class="fld">Lisans Tipi</label>
+            <select id="ca_lt"><option value="uretim">Lisans (Üretim)</option><option value="onlisan">Önlisans</option></select>
+          </div>
+        </div>
+
+        <label class="fld">Koordinat Formatı *</label>
+        <div class="radio-row">
+          <label><input type="radio" name="ca_fmt" value="wgs84" checked /> WGS84 (Enlem, Boylam — ondalık derece)</label>
+          <label><input type="radio" name="ca_fmt" value="tm" /> TM / UTM (E, N)</label>
+        </div>
+        <div id="ca_dilimBox" style="display:none;margin-top:8px">
+          <label class="fld">Dilim (Orta Meridyen) *</label>
+          <select id="ca_dilim" style="max-width:200px">
+            <option value="">Seçiniz…</option>
+            <option value="27">27</option><option value="30">30</option><option value="33">33</option>
+            <option value="36">36</option><option value="39">39</option><option value="42">42</option><option value="45">45</option>
+          </select>
+        </div>
+
+        <div class="sec-box">
+          <label class="head"><input type="checkbox" id="ca_polyOn" checked /> Poligon (saha sınırı) gireceğim</label>
+          <div id="ca_polyBox">
+            <p class="hint">Her satır bir nokta: <b>etiket &nbsp; değer1 &nbsp; değer2</b> (Excel'den yapıştır; tab/virgül/boşluk ayraç). WGS84: enlem, boylam. TM: E, N.</p>
+            <textarea id="ca_poly" placeholder="1&#9;38.60&#9;26.45&#10;2&#9;38.61&#9;26.46&#10;3&#9;38.59&#9;26.47"></textarea>
+          </div>
+        </div>
+
+        <div class="sec-box">
+          <label class="head"><input type="checkbox" id="ca_turbOn" /> Türbin noktaları gireceğim</label>
+          <div id="ca_turbBox" style="display:none">
+            <p class="hint">Türbin noktaları poligon ÇİZİLMEZ, ayrı işaret olarak gösterilir. Aynı format: etiket, değer1, değer2.</p>
+            <textarea id="ca_turb" placeholder="T1&#9;38.605&#9;26.455&#10;T2&#9;38.607&#9;26.458"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-ft">
+        <span class="msg" id="ca_msg"></span>
+        <button class="save" id="ca_save">Kaydet ve Haritaya İşle</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-  <script src="/static/common.js?v=9"></script>
-  <script src="/static/map.js?v=9"></script>
+  <script src="/static/common.js?v=10"></script>
+  <script src="/static/map.js?v=10"></script>
+  <script src="/static/coord_add.js?v=10"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 """Tesis API'si: filtre + sayfalama + GeoJSON + KMZ + koordinat/CSV indirme."""
 import csv
 import gzip
+import hashlib
 import io
 import json
 import os
@@ -11,7 +12,8 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from ..coords import tm_to_wgs84
+from ..coords import (area_centroid, build_rings_latlng, in_turkey,
+                      process_polygon, tm_to_wgs84)
 from ..database import get_db
 from ..kmz import build_kmz
 from ..models import Facility, License
@@ -358,3 +360,126 @@ def facility_kmz(fac_id: int, db: Session = Depends(get_db)):
     return StreamingResponse(
         io.BytesIO(data), media_type="application/vnd.google-earth.kmz",
         headers={"Content-Disposition": f"attachment; filename={fname}"})
+
+
+def _invalidate_geojson_cache():
+    """Manuel ekleme sonrasi onbellegi gecersizle: bellek onbellegini temizle +
+    DB imzasini sifirla (disk onbellegi yeni imzayla otomatik yeniden uretilir)."""
+    global _DB_SIG
+    _DB_SIG = None
+    _GEOJSON_CACHE.clear()
+
+
+def _to_float(v):
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip().replace(" ", "")
+    if not s:
+        return None
+    if "," in s and "." in s:          # 1.234,56 -> 1234.56
+        s = s.replace(".", "").replace(",", ".")
+    elif "," in s:                     # 39,5 -> 39.5
+        s = s.replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _parse_pts(rows):
+    """[{label,v1,v2}, ...] -> temiz [{ad,a,b}] (v1/v2 sayiya cevrilmis)."""
+    out = []
+    for r in rows or []:
+        a = _to_float(r.get("v1"))
+        b = _to_float(r.get("v2"))
+        if a is None or b is None:
+            continue
+        out.append({"ad": str(r.get("label") or "").strip(), "a": a, "b": b})
+    return out
+
+
+@router.post("/manual")
+def manual_add(payload: dict, db: Session = Depends(get_db)):
+    """Manuel koordinat girisi: yeni tesis olustur + poligon/turbin noktalarini
+    WGS84'e cevirip haritaya isle. coord_type: 'wgs84' (a=enlem,b=boylam) veya
+    'tm' (a=E,b=N + dilim). Poligon ve/veya turbin noktalari verilebilir."""
+    tesis_adi = str(payload.get("tesis_adi") or "").strip()
+    if not tesis_adi:
+        raise HTTPException(400, "Tesis adi gerekli")
+    il = str(payload.get("il") or "").strip() or None
+    ilce = str(payload.get("ilce") or "").strip() or None
+    kaynak = str(payload.get("kaynak_turu") or "").strip() or None
+    lt = "uretim" if payload.get("lisans_tipi") == "uretim" else "onlisan"
+    ctype = "tm" if payload.get("coord_type") == "tm" else "wgs84"
+    dilim = payload.get("dilim")
+    try:
+        dilim = int(dilim) if dilim not in (None, "") else None
+    except (ValueError, TypeError):
+        dilim = None
+    if ctype == "tm" and not dilim:
+        raise HTTPException(400, "TM/UTM icin dilim (meridyen) secilmeli")
+
+    poly = _parse_pts(payload.get("polygon"))
+    turb = _parse_pts(payload.get("turbine"))
+    if not poly and not turb:
+        raise HTTPException(400, "En az bir poligon ya da turbin noktasi gerekli")
+
+    # --- WGS84'e cevir + halka/nokta kur ---
+    if ctype == "tm":
+        raw = [{"ad": p["ad"], "meridian": dilim, "E": p["a"], "N": p["b"]} for p in poly]
+        res = process_polygon(raw) if raw else {"polygon_wgs84": None,
+                                                "centroid_lat": None, "centroid_lng": None}
+        rings = res.get("polygon_wgs84")
+        turb_wgs = [list(tm_to_wgs84(dilim, t["a"], t["b"])) for t in turb]
+        turb_wgs = [[round(la, 6), round(ln, 6)] for la, ln in turb_wgs]
+    else:  # wgs84: a=enlem, b=boylam
+        rings = build_rings_latlng([{"ad": p["ad"], "lat": p["a"], "lng": p["b"]} for p in poly])
+        turb_wgs = [[round(t["a"], 6), round(t["b"], 6)] for t in turb]
+
+    # merkez: once poligon alan-merkezi, yoksa turbin ortalamasi
+    clat = clng = None
+    if rings:
+        clat, clng = area_centroid(rings)
+    elif turb_wgs:
+        clat = sum(t[0] for t in turb_wgs) / len(turb_wgs)
+        clng = sum(t[1] for t in turb_wgs) / len(turb_wgs)
+    if clat is None:
+        raise HTTPException(400, "Gecerli koordinat cikmadi (degerleri/format'i kontrol edin)")
+    clat, clng = round(clat, 6), round(clng, 6)
+
+    first = (rings[0][0] if rings else turb_wgs[0])
+    tumu = [pt for r in (rings or []) for pt in r] + (turb_wgs or [])
+    supheli = not all(in_turkey(la, ln) for la, ln in tumu)
+
+    # --- manuel lisans (tipe gore paylasimli) ---
+    lno = f"MANUEL-{lt.upper()}"
+    lic = db.query(License).filter_by(lisans_no=lno).first()
+    if not lic:
+        lic = License(lisans_no=lno, lisans_tipi=lt, unvan="Manuel Giris",
+                      lisans_durumu="Yürürlükte", is_active=True)
+        db.add(lic); db.flush()
+
+    # --- benzersiz hash (cakisirsa sayac ekle) ---
+    base = f"manuel|{lt}|{tesis_adi}|{il}|{ilce}"
+    uh = "man-" + hashlib.md5(base.encode("utf-8")).hexdigest()[:16]
+    if db.query(Facility).filter_by(unique_hash=uh).first():
+        k = 2
+        while db.query(Facility).filter_by(unique_hash=f"{uh}-{k}").first():
+            k += 1
+        uh = f"{uh}-{k}"
+
+    fac = Facility(
+        license_id=lic.id, tesis_adi=tesis_adi, il=il, ilce=ilce, kaynak_turu=kaynak,
+        dilim_meridyeni=dilim, polygon_wgs84=rings or None,
+        turbine_points=turb_wgs or None,
+        centroid_lat=clat, centroid_lng=clng,
+        first_point_lat=first[0], first_point_lng=first[1],
+        koordinat_alindi=True, koordinat_durumu="supheli" if supheli else "ok",
+        unique_hash=uh, is_active=True)
+    db.add(fac); db.commit()
+    _invalidate_geojson_cache()
+    return {"id": fac.id, "tesis_adi": tesis_adi, "centroid": [clat, clng],
+            "halka": len(rings) if rings else 0, "turbin": len(turb_wgs),
+            "durum": fac.koordinat_durumu, "lisans_tipi": lt}

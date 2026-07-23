@@ -84,6 +84,26 @@ def build_rings(raw_points):
     return rings
 
 
+def build_rings_latlng(points):
+    """MANUEL giris: [{'ad':.., 'lat':.., 'lng':..}] -> halka listesi.
+    Etiket ARDISIK DEGILSE (|fark|!=1) yeni parca; parca ICI YAPISTIRMA SIRASINI
+    korur (kullanici sirayi kendi verir). Etiketsiz -> tek halka."""
+    pts = [p for p in points
+           if p.get("lat") is not None and p.get("lng") is not None]
+    if not pts:
+        return []
+    nums = [_adnum(p.get("ad")) for p in pts]
+    parts, cur, prev = [], [], None
+    for j, x in enumerate(nums):
+        if prev is not None and x is not None and abs(x - prev) != 1:
+            parts.append(cur); cur = []
+        cur.append(j); prev = x
+    if cur:
+        parts.append(cur)
+    return [[[round(pts[j]["lat"], 6), round(pts[j]["lng"], 6)] for j in part]
+            for part in parts]
+
+
 def in_turkey(lat: float, lng: float) -> bool:
     return (settings.tr_lat_min <= lat <= settings.tr_lat_max
             and settings.tr_lng_min <= lng <= settings.tr_lng_max)
