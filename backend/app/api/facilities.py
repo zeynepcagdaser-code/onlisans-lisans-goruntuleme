@@ -21,6 +21,25 @@ router = APIRouter(prefix="/api/facilities", tags=["facilities"])
 
 _TR = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
 
+# Turkce-duyarli arama: SQLite LIKE/ilike sadece ASCII katliyor (İ/Ğ/Ş katlamaz),
+# bu yuzden "degirmen" yazinca "DEĞİRMEN"i bulamiyordu. Iki tarafi da ASCII-kucuk'e
+# katlayip karsilastir.
+_TR_PAIRS = [("ç", "c"), ("ğ", "g"), ("ı", "i"), ("ö", "o"), ("ş", "s"), ("ü", "u"),
+             ("Ç", "C"), ("Ğ", "G"), ("İ", "I"), ("Ö", "O"), ("Ş", "S"), ("Ü", "U")]
+
+
+def _fold_sql(col):
+    """Bir kolonu SQL icinde Turkce->ASCII katla + kucuk harf (nested REPLACE)."""
+    expr = col
+    for a, b in _TR_PAIRS:
+        expr = func.replace(expr, a, b)
+    return func.lower(expr)
+
+
+def _fold_py(s: str) -> str:
+    """Arama terimini Turkce->ASCII katla + kucuk harf."""
+    return (s or "").translate(_TR).lower()
+
 
 def _safe_filename(name: str, default: str = "dosya") -> str:
     """HTTP header (latin-1) icin ASCII-guvenli dosya adi."""
@@ -76,11 +95,14 @@ def _apply_filters(q, *, il, ilce, kaynak_turu, tesis_turu, lisans_durumu,
     if only_with_coords:
         q = q.filter(Facility.centroid_lat.isnot(None))
     if search:
-        like = f"%{search}%"
+        # Turkce-duyarli: iki tarafi da ASCII-kucuk'e katla -> "degirmen" => "DEĞİRMEN"
+        term = f"%{_fold_py(search)}%"
         q = q.filter(or_(
-            Facility.tesis_adi.ilike(like), License.unvan.ilike(like),
-            License.lisans_no.ilike(like), Facility.il.ilike(like),
-            Facility.ilce.ilike(like)))
+            _fold_sql(Facility.tesis_adi).like(term),
+            _fold_sql(License.unvan).like(term),
+            _fold_sql(License.lisans_no).like(term),
+            _fold_sql(Facility.il).like(term),
+            _fold_sql(Facility.ilce).like(term)))
     return q
 
 
