@@ -86,14 +86,29 @@
   }
   function setMsg(t, ok) { const m = $("ca_msg"); m.textContent = t; m.style.color = ok ? "#16a34a" : "#dc2626"; }
 
+  // Cevrilmis geometriyi (manuel /convert ya da KMZ /import-kmz'den) kullaniciya ekle.
+  function commitItem(geom, nameFallback) {
+    const ad = $("ca_ad").value.trim() || nameFallback || "Manuel tesis";
+    const item = {
+      id: "m" + Date.now() + Math.floor(performance.now() % 1000),
+      tesis_adi: ad, il: $("ca_il").value.trim(), ilce: $("ca_ilce").value.trim(),
+      kaynak_turu: $("ca_kaynak").value, lisans_tipi: $("ca_lt").value,
+      polygon_wgs84: geom.polygon_wgs84, turbine_points: geom.turbine_points,
+      centroid: geom.centroid, durum: geom.durum,
+    };
+    const items = getItems(); items.push(item); setItems(items);
+    drawItem(item);
+    if (typeof map !== "undefined") map.setView(item.centroid, 13);
+    if (typeof toast === "function") toast(`"${ad}" haritanıza eklendi (sadece siz görüyorsunuz).`);
+    return item;
+  }
+
   async function save() {
-    const ad = $("ca_ad").value.trim();
-    if (!ad) { setMsg("Tesis adı gerekli.", false); return; }
     const format = fmt();
     if (format === "tm" && !$("ca_dilim").value) { setMsg("TM/UTM için dilim seçin.", false); return; }
     const polygon = $("ca_polyOn").checked ? parseLines($("ca_poly").value) : [];
     const turbine = $("ca_turbOn").checked ? parseLines($("ca_turb").value) : [];
-    if (!polygon.length && !turbine.length) { setMsg("En az bir poligon ya da türbin noktası yapıştırın.", false); return; }
+    if (!polygon.length && !turbine.length) { setMsg("En az bir poligon ya da türbin noktası yapıştırın (ya da KMZ yükleyin).", false); return; }
 
     const btn = $("ca_save"); btn.disabled = true; setMsg("İşleniyor…", true);
     try {
@@ -102,24 +117,32 @@
         body: JSON.stringify({ coord_type: format, dilim: format === "tm" ? $("ca_dilim").value : null, polygon, turbine }),
       });
       const d = await r.json();
-      if (!r.ok) { setMsg("Hata: " + (d.detail || r.status), false); btn.disabled = false; return; }
-
-      const item = {
-        id: "m" + Date.now() + Math.floor(performance.now() % 1000),
-        tesis_adi: ad, il: $("ca_il").value.trim(), ilce: $("ca_ilce").value.trim(),
-        kaynak_turu: $("ca_kaynak").value, lisans_tipi: $("ca_lt").value,
-        polygon_wgs84: d.polygon_wgs84, turbine_points: d.turbine_points,
-        centroid: d.centroid, durum: d.durum,
-      };
-      const items = getItems(); items.push(item); setItems(items);
-      drawItem(item);
-      if (typeof map !== "undefined") map.setView(item.centroid, 13);
-      setMsg(`Eklendi ✓ (${item.polygon_wgs84 ? item.polygon_wgs84.length : 0} halka, ${item.turbine_points ? item.turbine_points.length : 0} türbin)`, true);
-      if (typeof toast === "function") toast(`"${ad}" haritanıza eklendi (sadece siz görüyorsunuz).`);
+      if (!r.ok) { setMsg("Hata: " + (d.detail || r.status), false); return; }
+      const it = commitItem(d, null);
+      setMsg(`Eklendi ✓ (${it.polygon_wgs84 ? it.polygon_wgs84.length : 0} halka, ${it.turbine_points ? it.turbine_points.length : 0} türbin)`, true);
       $("ca_poly").value = ""; $("ca_turb").value = "";
       setTimeout(closeModal, 1100);
     } catch (e) {
-      setMsg("Bağlantı hatası: " + e.message, false); btn.disabled = false;
+      setMsg("Bağlantı hatası: " + e.message, false);
+    } finally { btn.disabled = false; }
+  }
+
+  async function uploadKmz() {
+    const f = $("ca_kmz").files && $("ca_kmz").files[0];
+    if (!f) { setMsg("Önce bir KMZ/KML dosyası seçin.", false); return; }
+    const btn = $("ca_kmzBtn"); btn.disabled = true; setMsg("Dosya işleniyor…", true);
+    try {
+      const fd = new FormData(); fd.append("file", f);
+      const r = await fetch(API + "/api/facilities/import-kmz", { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) { setMsg("Hata: " + (d.detail || r.status), false); return; }
+      const fallback = d.name || f.name.replace(/\.(kmz|kml)$/i, "");
+      const it = commitItem(d, fallback);
+      setMsg(`KMZ eklendi ✓ (${it.polygon_wgs84 ? it.polygon_wgs84.length : 0} halka, ${it.turbine_points ? it.turbine_points.length : 0} nokta)`, true);
+      $("ca_kmz").value = "";
+      setTimeout(closeModal, 1200);
+    } catch (e) {
+      setMsg("Yükleme hatası: " + e.message, false);
     } finally { btn.disabled = false; }
   }
 
@@ -133,6 +156,7 @@
     $("ca_polyOn").onchange = () => ($("ca_polyBox").style.display = $("ca_polyOn").checked ? "" : "none");
     $("ca_turbOn").onchange = () => ($("ca_turbBox").style.display = $("ca_turbOn").checked ? "" : "none");
     $("ca_save").onclick = save;
+    $("ca_kmzBtn").onclick = uploadKmz;
     syncFmt();
     restoreAll();
   }

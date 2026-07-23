@@ -4,9 +4,11 @@ import gzip
 import io
 import json
 import os
+import xml.etree.ElementTree as ET
+import zipfile
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
@@ -438,6 +440,96 @@ def convert_coords(payload: dict):
     return {
         "polygon_wgs84": rings or None,
         "turbine_points": turb_wgs or None,
+        "centroid": [round(clat, 6), round(clng, 6)],
+        "durum": "supheli" if supheli else "ok",
+    }
+
+
+def _kml_local(tag):
+    return tag.split("}")[-1]        # namespace'siz etiket adi
+
+
+def _kml_coords(text):
+    """KML 'lon,lat,alt lon,lat,alt ...' -> [[lat,lng], ...] (WGS84)."""
+    pts = []
+    for tok in (text or "").replace("\n", " ").split():
+        parts = tok.split(",")
+        if len(parts) >= 2:
+            try:
+                lon = float(parts[0]); lat = float(parts[1])
+            except ValueError:
+                continue
+            pts.append([round(lat, 6), round(lon, 6)])
+    return pts
+
+
+def _child_coords(el):
+    for c in el.iter():
+        if _kml_local(c.tag) == "coordinates" and c.text and c.text.strip():
+            return _kml_coords(c.text)
+    return None
+
+
+def _parse_kml(kml_bytes):
+    """KML -> (isim, halka-listesi, nokta-listesi). Polygon/LinearRing/LineString =
+    halka; Point = tekil nokta."""
+    root = ET.fromstring(kml_bytes)
+    name = None
+    rings, points = [], []
+    for el in root.iter():
+        ln = _kml_local(el.tag)
+        if ln == "name" and el.text and el.text.strip() and name is None:
+            name = el.text.strip()
+        elif ln in ("LinearRing", "LineString"):
+            c = _child_coords(el)
+            if c and len(c) >= 2:
+                rings.append(c)
+        elif ln == "Point":
+            c = _child_coords(el)
+            if c:
+                points.append(c[0])
+    return name, rings, points
+
+
+@router.post("/import-kmz")
+async def import_kmz(file: UploadFile = File(...)):
+    """KMZ/KML dosyasini ayristir -> WGS84 halka/nokta doner. KAYDETMEZ (yalnizca
+    kullanicinin kendi haritasinda gostermesi icin; /convert ile ayni mantik)."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "Bos dosya")
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(400, "Dosya cok buyuk (>25MB)")
+    try:
+        if data[:2] == b"PK":                       # ZIP (KMZ) imzasi
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                kmls = [n for n in z.namelist() if n.lower().endswith(".kml")]
+                if not kmls:
+                    raise HTTPException(400, "KMZ icinde .kml bulunamadi")
+                kml_bytes = z.read(kmls[0])
+        else:                                        # duz KML (xml)
+            kml_bytes = data
+        name, rings, points = _parse_kml(kml_bytes)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"KMZ/KML okunamadi: {str(e)[:120]}")
+
+    rings = [r for r in rings if r and len(r) >= 3]
+    if not rings and not points:
+        raise HTTPException(400, "Dosyada koordinat (poligon/nokta) bulunamadi")
+
+    if rings:
+        clat, clng = area_centroid(rings)
+    else:
+        clat = sum(p[0] for p in points) / len(points)
+        clng = sum(p[1] for p in points) / len(points)
+    tumu = [pt for r in rings for pt in r] + points
+    supheli = not all(in_turkey(la, ln) for la, ln in tumu)
+    return {
+        "name": name,
+        "polygon_wgs84": rings or None,
+        "turbine_points": points or None,
         "centroid": [round(clat, 6), round(clng, 6)],
         "durum": "supheli" if supheli else "ok",
     }

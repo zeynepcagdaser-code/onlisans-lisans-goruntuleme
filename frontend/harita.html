@@ -117,6 +117,16 @@
           </div>
         </div>
 
+        <div class="sec-box" style="margin-top:14px">
+          <label class="head" style="cursor:default">📁 KMZ / KML dosyası yükle</label>
+          <p class="hint">Dosyadaki poligon/noktalar haritanıza eklenir. Yine <b>kaydedilmez</b>, sadece siz görürsünüz.</p>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+            <input type="file" id="ca_kmz" accept=".kmz,.kml" style="flex:1" />
+            <button id="ca_kmzBtn" type="button" style="background:#16a34a;color:#fff;border:none;border-radius:7px;padding:8px 14px;cursor:pointer;font-size:13px">Yükle</button>
+          </div>
+        </div>
+        <div style="text-align:center;color:var(--muted);font-size:12px;margin:14px 0 2px">— ya da manuel koordinat yapıştır —</div>
+
         <label class="fld">Koordinat Formatı *</label>
         <div class="radio-row">
           <label><input type="radio" name="ca_fmt" value="wgs84" checked /> WGS84 (Enlem, Boylam — ondalık derece)</label>
@@ -158,6 +168,6 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="/static/common.js?v=10"></script>
   <script src="/static/map.js?v=10"></script>
-  <script src="/static/coord_add.js?v=11"></script>
+  <script src="/static/coord_add.js?v=12"></script>
 </body>
 </html>
