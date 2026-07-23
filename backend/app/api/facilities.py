@@ -633,3 +633,140 @@ async def import_kmz(file: UploadFile = File(...)):
         "centroid": [round(clat, 6), round(clng, 6)],
         "durum": "supheli" if supheli else "ok",
     }
+
+
+# ---------- Cizim DISA AKTARMA (KMZ / KML / GeoJSON / DXF) ----------
+def _xml_esc(s):
+    return (str(s or "").replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+def _kml_coord_str(coords):
+    """GeoJSON [[lng,lat],...] -> KML 'lng,lat,0 ...'."""
+    return " ".join(f"{c[0]},{c[1]},0" for c in coords if len(c) >= 2)
+
+
+def _kml_rings(rings):
+    out = []
+    for i, r in enumerate(rings):
+        tag = "outerBoundaryIs" if i == 0 else "innerBoundaryIs"
+        out.append(f"<{tag}><LinearRing><coordinates>{_kml_coord_str(r)}"
+                   f"</coordinates></LinearRing></{tag}>")
+    return "".join(out)
+
+
+def _geojson_to_kml(features, doc_name):
+    p = ['<?xml version="1.0" encoding="UTF-8"?>',
+         '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>',
+         f"<name>{_xml_esc(doc_name)}</name>"]
+    for f in features:
+        g = f.get("geometry") or {}
+        t = g.get("type"); c = g.get("coordinates")
+        nm = _xml_esc((f.get("properties") or {}).get("name") or "")
+        if not c:
+            continue
+        if t == "Point":
+            p.append(f"<Placemark><name>{nm}</name><Point><coordinates>"
+                     f"{c[0]},{c[1]},0</coordinates></Point></Placemark>")
+        elif t == "LineString":
+            p.append(f"<Placemark><name>{nm}</name><LineString><coordinates>"
+                     f"{_kml_coord_str(c)}</coordinates></LineString></Placemark>")
+        elif t == "Polygon":
+            p.append(f"<Placemark><name>{nm}</name><Polygon>{_kml_rings(c)}</Polygon></Placemark>")
+        elif t == "MultiPolygon":
+            for poly in c:
+                p.append(f"<Placemark><name>{nm}</name><Polygon>{_kml_rings(poly)}</Polygon></Placemark>")
+    p.append("</Document></kml>")
+    return "\n".join(p)
+
+
+def _first_coord(features):
+    for f in features:
+        g = f.get("geometry") or {}
+        c = g.get("coordinates"); t = g.get("type")
+        if not c:
+            continue
+        if t == "Point":
+            return c
+        if t == "LineString":
+            return c[0]
+        if t == "Polygon":
+            return c[0][0]
+        if t == "MultiPolygon":
+            return c[0][0][0]
+    return None
+
+
+def _geojson_to_dxf(features):
+    """GeoJSON -> DXF (bytes). WGS84 -> UTM metre (CAD metre ister). Poligon/cizgi =
+    LWPOLYLINE, nokta = POINT. Zone, ilk koordinatin boylamindan secilir."""
+    import ezdxf                              # tembel import: yoksa sadece DXF cokmesin
+    from pyproj import Transformer
+    fc = _first_coord(features) or [35.0, 39.0]
+    zone = int((fc[0] + 180) / 6) + 1
+    epsg = (32600 if fc[1] >= 0 else 32700) + zone
+    tf = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True)
+
+    def xy(c):
+        x, y = tf.transform(c[0], c[1])
+        return (round(x, 3), round(y, 3))
+
+    doc = ezdxf.new("R2010")
+    msp = doc.modelspace()
+    for f in features:
+        g = f.get("geometry") or {}
+        t = g.get("type"); c = g.get("coordinates")
+        if not c:
+            continue
+        if t == "Point":
+            msp.add_point(xy(c))
+        elif t == "LineString":
+            msp.add_lwpolyline([xy(pt) for pt in c])
+        elif t == "Polygon":
+            for r in c:
+                msp.add_lwpolyline([xy(pt) for pt in r], close=True)
+        elif t == "MultiPolygon":
+            for poly in c:
+                for r in poly:
+                    msp.add_lwpolyline([xy(pt) for pt in r], close=True)
+    buf = io.StringIO()
+    doc.write(buf)
+    return buf.getvalue().encode("utf-8"), epsg
+
+
+def _dl(body, filename, media):
+    return Response(content=body, media_type=media,
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@router.post("/export")
+def export_shapes(payload: dict):
+    """Kullanicinin CIZDIGI sekilleri (GeoJSON) secilen formata cevirip indir.
+    format: kmz | kml | geojson | dxf. KAYDETMEZ (stateless)."""
+    fmt = (payload.get("format") or "kml").lower()
+    gj = payload.get("geojson") or {}
+    features = gj.get("features") or []
+    if not features:
+        raise HTTPException(400, "Disa aktarilacak cizim yok")
+    name = _safe_filename(payload.get("name") or "cizimlerim")
+    doc_name = payload.get("name") or "cizimlerim"
+
+    if fmt == "geojson":
+        body = json.dumps(gj, ensure_ascii=False).encode("utf-8")
+        return _dl(body, f"{name}.geojson", "application/geo+json")
+    if fmt in ("kml", "kmz"):
+        kml = _geojson_to_kml(features, doc_name)
+        if fmt == "kml":
+            return _dl(kml.encode("utf-8"), f"{name}.kml",
+                       "application/vnd.google-earth.kml+xml")
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("doc.kml", kml)
+        return _dl(buf.getvalue(), f"{name}.kmz", "application/vnd.google-earth.kmz")
+    if fmt == "dxf":
+        try:
+            data, _epsg = _geojson_to_dxf(features)
+        except ImportError:
+            raise HTTPException(500, "DXF icin 'ezdxf' gerekli (sunucuda kurulu degil)")
+        return _dl(data, f"{name}.dxf", "application/dxf")
+    raise HTTPException(400, "Bilinmeyen format")
