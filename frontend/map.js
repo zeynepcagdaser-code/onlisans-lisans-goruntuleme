@@ -26,6 +26,32 @@ map.addLayer(cluster);
 let allFeatures = [];
 let disabledKaynak = new Set();
 
+// --- Kisisel GIZLE / geri getir (kullanicinin KENDI ekrani; localStorage) ---
+const HIDDEN_KEY = "gizli_tesisler_v1";
+function getHidden() { try { return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]").map(String)); } catch (e) { return new Set(); } }
+let hiddenIds = getHidden();
+function saveHidden() { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenIds])); }
+function hideFacility(id) { hiddenIds.add(String(id)); saveHidden(); render(); }
+function unhideFacility(id) { hiddenIds.delete(String(id)); saveHidden(); render(); }
+function unhideAll() { hiddenIds.clear(); saveHidden(); render(); }
+window.hideFacility = hideFacility;
+window.unhideFacility = unhideFacility;
+window.unhideAll = unhideAll;
+
+function updateHiddenPanel() {
+  const el = document.getElementById("hiddenPanel");
+  if (!el) return;
+  if (!hiddenIds.size) { el.style.display = "none"; el.innerHTML = ""; return; }
+  const byId = {};
+  for (const f of allFeatures) { const p = f.properties; if (p.id != null) byId[p.id] = p.tesis_adi || ("Tesis " + p.id); }
+  const rows = [...hiddenIds].map(id =>
+    `<div class="hp-row"><span title="${byId[id] || id}">${byId[id] || ("Tesis " + id)}</span>`
+    + `<button onclick="unhideFacility('${id}')">geri getir</button></div>`).join("");
+  el.style.display = "";
+  el.innerHTML = `<div class="hp-hd">🚫 Gizlenen (${hiddenIds.size})`
+    + `<button onclick="unhideAll()">hepsini geri getir</button></div>${rows}`;
+}
+
 function popupHtml(p) {
   const row = (k, v) => v === null || v === undefined || v === "" ? "" :
     `<tr><td class="k">${k}</td><td>${v}</td></tr>`;
@@ -37,6 +63,7 @@ function popupHtml(p) {
         <div class="menu">
           <a onclick="dl('/api/facilities/${p.id}/coordinates')">📄 Koordinat Bilgilerini İndir (CSV)</a>
           <a onclick="dl('/api/facilities/${p.id}/kmz')">🌍 KMZ Olarak İndir</a>
+          <a onclick="hideFacility('${p.id}')">🚫 Bu tesisi ekranımdan kaldır</a>
         </div>
       </div>
     </div>
@@ -64,6 +91,7 @@ function render() {
   let shown = 0;
   for (const feat of allFeatures) {
     const p = feat.properties;
+    if (p.id != null && hiddenIds.has(String(p.id))) continue;   // kullanici gizledi
     if (feat.geometry.type === "Point") {
       if (disabledKaynak.has(trUpper(p.kaynak_turu))) continue;
       const [lng, lat] = feat.geometry.coordinates;
@@ -95,6 +123,7 @@ function render() {
     }
   }
   document.getElementById("countPill").textContent = shown + " tesis";
+  updateHiddenPanel();
 }
 
 function buildLegend() {
