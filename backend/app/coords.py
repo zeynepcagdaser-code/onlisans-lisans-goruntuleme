@@ -66,10 +66,13 @@ def build_rings(raw_points):
                        key=lambda j: nums[j] if nums[j] is not None else 10 ** 9)
         return [[ll(idx[j]) for j in order]]
 
-    # cok-parcali: ad geri sicramasinda yeni parca
+    # cok-parcali: ad ARDISIK DEGILSE (|fark|!=1) yeni parca. Boylece bir halka
+    # ARTAN (1,2,3..) ya da AZALAN (256,255,254..) sirada olabilir -> tek halka
+    # kalir; yalnizca gercek kopus ( or. 145->158 veya 33->1 reset) yeni parca acar.
+    # (Eski 'x < prev' kurali azalan etiketli tesisi her noktada bolup bozuyordu.)
     parts, cur, prev = [], [], None
     for j, x in enumerate(nums):
-        if prev is not None and x is not None and x < prev:
+        if prev is not None and x is not None and abs(x - prev) != 1:
             parts.append(cur); cur = []
         cur.append(j); prev = x
     if cur:
@@ -170,9 +173,12 @@ def split_rings(polygon_wgs84, ham_tm3):
 
 def _saglam_en(E, N):
     """Ham E/N Turkiye TM araliginda mi? EPDK placeholder (1, 111111, 333333,
-    1111111 vb.) ve bos degerler elenir."""
+    1111111 vb.) ve bos degerler elenir.
+    N alt siniri 3.90M: Turkiye'nin EN GUNEYI (Hatay ~35.9-36.2N) northing'i
+    ~3.96-4.00M olabilir; eski 4.00M siniri Hatay RES'lerini (SENKOY/SEBENOBA)
+    yanlislikla eliyordu. Placeholder repdigit'ler (2222222/3333333) yine <3.90M."""
     try:
-        return E is not None and N is not None and 150000 < E < 850000 and 4000000 < N < 4700000
+        return E is not None and N is not None and 150000 < E < 850000 and 3900000 < N < 4700000
     except TypeError:
         return False
 
