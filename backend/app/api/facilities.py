@@ -470,25 +470,123 @@ def _child_coords(el):
     return None
 
 
+def _kml_color_to_css(c):
+    """KML rengi 'aabbggrr' (alfa,mavi,yesil,kirmizi) -> (#rrggbb, opaklik 0..1).
+    Kullanicinin KMZ'deki rengi KORUNSUN diye; gecersizse (None, None)."""
+    if not c:
+        return None, None
+    c = c.strip().lstrip("#")
+    try:
+        if len(c) == 8:
+            a = int(c[0:2], 16); b = int(c[2:4], 16); g = int(c[4:6], 16); r = int(c[6:8], 16)
+            return f"#{r:02x}{g:02x}{b:02x}", round(a / 255, 2)
+        if len(c) == 6:                      # rrggbb (nadiren)
+            return "#" + c.lower(), 1.0
+    except ValueError:
+        pass
+    return None, None
+
+
+def _extract_style(style_el):
+    """<Style> -> {stroke, fill, fillOpacity} (KML renkleri)."""
+    out = {}
+    for el in style_el.iter():
+        ln = _kml_local(el.tag)
+        if ln in ("LineStyle", "PolyStyle", "IconStyle"):
+            for c in el:
+                if _kml_local(c.tag) == "color" and c.text:
+                    hexc, op = _kml_color_to_css(c.text)
+                    if not hexc:
+                        continue
+                    if ln == "PolyStyle":
+                        out["fill"] = hexc
+                        if op is not None:
+                            out["fillOpacity"] = op
+                    else:                     # Line/Icon -> cizgi/nokta rengi
+                        out["stroke"] = hexc
+    return out
+
+
+def _stylemap_normal(sm_el):
+    """<StyleMap> -> 'normal' key'inin styleUrl'i (highlight degil)."""
+    for pair in sm_el.iter():
+        if _kml_local(pair.tag) != "Pair":
+            continue
+        k = u = None
+        for c in pair:
+            l = _kml_local(c.tag)
+            if l == "key":
+                k = (c.text or "").strip()
+            elif l == "styleUrl":
+                u = (c.text or "").strip()
+        if k == "normal" and u:
+            return u
+    return None
+
+
 def _parse_kml(kml_bytes):
-    """KML -> (isim, halka-listesi, nokta-listesi). Polygon/LinearRing/LineString =
-    halka; Point = tekil nokta."""
+    """KML -> (isim, sekil-listesi). Her sekil KENDI rengini tasir (KMZ'deki gibi).
+    sekil = {kind:'polygon'|'line'|'point', ...geometri..., stroke/fill/fillOpacity}."""
     root = ET.fromstring(kml_bytes)
-    name = None
-    rings, points = [], []
+    styles, stylemaps = {}, {}
     for el in root.iter():
         ln = _kml_local(el.tag)
-        if ln == "name" and el.text and el.text.strip() and name is None:
-            name = el.text.strip()
-        elif ln in ("LinearRing", "LineString"):
-            c = _child_coords(el)
-            if c and len(c) >= 2:
-                rings.append(c)
-        elif ln == "Point":
-            c = _child_coords(el)
-            if c:
-                points.append(c[0])
-    return name, rings, points
+        if ln == "Style" and el.get("id"):
+            styles["#" + el.get("id")] = _extract_style(el)
+        elif ln == "StyleMap" and el.get("id"):
+            n = _stylemap_normal(el)
+            if n:
+                stylemaps["#" + el.get("id")] = n
+
+    def resolve(url):
+        seen = set()
+        while url in stylemaps and url not in seen:
+            seen.add(url); url = stylemaps[url]
+        return styles.get(url, {})
+
+    name = None
+    shapes = []
+    for pm in root.iter():
+        if _kml_local(pm.tag) != "Placemark":
+            continue
+        pmname, style = None, {}
+        for ch in pm:
+            l = _kml_local(ch.tag)
+            if l == "name" and ch.text and ch.text.strip():
+                pmname = ch.text.strip()
+            elif l == "styleUrl" and ch.text:
+                style = resolve(ch.text.strip())
+            elif l == "Style":
+                style = _extract_style(ch)
+        if name is None and pmname:
+            name = pmname
+        stroke = style.get("stroke")
+        fill = style.get("fill")
+        fopac = style.get("fillOpacity")
+        for geo in pm.iter():
+            gl = _kml_local(geo.tag)
+            if gl == "Polygon":
+                rings = []
+                for lr in geo.iter():
+                    if _kml_local(lr.tag) == "LinearRing":
+                        c = _child_coords(lr)
+                        if c and len(c) >= 3:
+                            rings.append(c)
+                if rings:
+                    shapes.append({"kind": "polygon", "rings": rings,
+                                   "stroke": stroke or fill, "fill": fill or stroke,
+                                   "fillOpacity": fopac, "label": pmname})
+            elif gl == "LineString":
+                c = _child_coords(geo)
+                if c and len(c) >= 2:
+                    shapes.append({"kind": "line", "coords": c,
+                                   "stroke": stroke or fill, "label": pmname})
+            elif gl == "Point":
+                c = _child_coords(geo)
+                if c:
+                    shapes.append({"kind": "point", "coord": c[0],
+                                   "color": stroke or fill, "label": pmname})
+    return name, shapes
 
 
 @router.post("/import-kmz")
@@ -509,27 +607,29 @@ async def import_kmz(file: UploadFile = File(...)):
                 kml_bytes = z.read(kmls[0])
         else:                                        # duz KML (xml)
             kml_bytes = data
-        name, rings, points = _parse_kml(kml_bytes)
+        name, shapes = _parse_kml(kml_bytes)
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(400, f"KMZ/KML okunamadi: {str(e)[:120]}")
 
-    rings = [r for r in rings if r and len(r) >= 3]
-    if not rings and not points:
-        raise HTTPException(400, "Dosyada koordinat (poligon/nokta) bulunamadi")
+    if not shapes:
+        raise HTTPException(400, "Dosyada koordinat (poligon/cizgi/nokta) bulunamadi")
 
-    if rings:
-        clat, clng = area_centroid(rings)
-    else:
-        clat = sum(p[0] for p in points) / len(points)
-        clng = sum(p[1] for p in points) / len(points)
-    tumu = [pt for r in rings for pt in r] + points
-    supheli = not all(in_turkey(la, ln) for la, ln in tumu)
+    allpts = []
+    for s in shapes:
+        if s["kind"] == "polygon":
+            allpts += [p for r in s["rings"] for p in r]
+        elif s["kind"] == "line":
+            allpts += s["coords"]
+        elif s["kind"] == "point":
+            allpts.append(s["coord"])
+    clat = sum(p[0] for p in allpts) / len(allpts)
+    clng = sum(p[1] for p in allpts) / len(allpts)
+    supheli = not all(in_turkey(la, ln) for la, ln in allpts)
     return {
         "name": name,
-        "polygon_wgs84": rings or None,
-        "turbine_points": points or None,
+        "shapes": shapes,                            # her sekil KENDI rengiyle
         "centroid": [round(clat, 6), round(clng, 6)],
         "durum": "supheli" if supheli else "ok",
     }

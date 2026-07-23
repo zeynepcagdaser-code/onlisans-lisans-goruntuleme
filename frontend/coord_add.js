@@ -22,7 +22,18 @@
       iconSize: [15, 15], iconAnchor: [7, 7], popupAnchor: [0, -8],
     });
   }
+  function counts(it) {
+    if (it.shapes) return {
+      poly: it.shapes.filter((s) => s.kind === "polygon").length,
+      line: it.shapes.filter((s) => s.kind === "line").length,
+      pt: it.shapes.filter((s) => s.kind === "point").length,
+    };
+    return { poly: it.polygon_wgs84 ? it.polygon_wgs84.length : 0, line: 0,
+             pt: it.turbine_points ? it.turbine_points.length : 0 };
+  }
   function popupHtml(it) {
+    const c = counts(it);
+    const icerik = `${c.poly} poligon` + (c.line ? `, ${c.line} çizgi` : "") + `, ${c.pt} nokta`;
     const row = (k, v) => v ? `<tr><td style="color:#64748b;padding:1px 5px">${k}</td><td>${v}</td></tr>` : "";
     return `<div style="min-width:200px;font-size:13px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
@@ -32,22 +43,45 @@
       <table style="margin-top:4px">
         ${row("Kaynak", it.kaynak_turu)}
         ${row("İl / İlçe", (it.il || "") + (it.ilce ? " / " + it.ilce : ""))}
-        ${row("Halka", (it.polygon_wgs84 ? it.polygon_wgs84.length : 0) + " poligon, " + (it.turbine_points ? it.turbine_points.length : 0) + " türbin")}
+        ${row("İçerik", icerik)}
       </table>
       <p style="font-size:11px;color:#64748b;margin:5px 0 4px">Yalnızca siz görüyorsunuz (tarayıcınıza kayıtlı).</p>
       <button onclick="silManuelKoord('${it.id}')" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px">🗑 Sil</button>
     </div>`;
   }
+  // KMZ'den gelen sekil: KENDI rengiyle ciz (turuncuya cevirme).
+  function drawShape(g, s) {
+    if (s.kind === "polygon") {
+      (s.rings || []).forEach((r) => {
+        if (r.length >= 3) g.addLayer(L.polygon(r, {
+          color: s.stroke || RENK, weight: 2,
+          fillColor: s.fill || s.stroke || RENK,
+          fillOpacity: (s.fillOpacity != null ? s.fillOpacity : 0.25),
+        }));
+      });
+    } else if (s.kind === "line") {
+      if ((s.coords || []).length >= 2)
+        g.addLayer(L.polyline(s.coords, { color: s.stroke || RENK, weight: 3 }));
+    } else if (s.kind === "point") {
+      const mk = L.circleMarker(s.coord, { radius: 5, color: "#fff", weight: 2, fillColor: s.color || RENK, fillOpacity: 1 });
+      if (s.label) mk.bindTooltip(s.label, { direction: "top", offset: [0, -4] });
+      g.addLayer(mk);
+    }
+  }
   function drawItem(it) {
     const g = L.layerGroup();
-    (it.polygon_wgs84 || []).forEach((ring) => {
-      if (ring && ring.length >= 3)
-        g.addLayer(L.polygon(ring, { color: RENK, weight: 2, fillOpacity: 0.15, dashArray: "5,4" }));
-    });
-    (it.turbine_points || []).forEach((t, i) => {
-      g.addLayer(L.circleMarker(t, { radius: 5, color: "#7c2d12", weight: 2, fillColor: "#fed7aa", fillOpacity: 1 })
-        .bindTooltip("T" + (i + 1), { direction: "top", offset: [0, -4] }));
-    });
+    if (it.shapes) {
+      it.shapes.forEach((s) => drawShape(g, s));
+    } else {                                   // eski/manuel yapi (turuncu varsayilan)
+      (it.polygon_wgs84 || []).forEach((ring) => {
+        if (ring && ring.length >= 3)
+          g.addLayer(L.polygon(ring, { color: RENK, weight: 2, fillOpacity: 0.15, dashArray: "5,4" }));
+      });
+      (it.turbine_points || []).forEach((t, i) => {
+        g.addLayer(L.circleMarker(t, { radius: 5, color: "#7c2d12", weight: 2, fillColor: "#fed7aa", fillOpacity: 1 })
+          .bindTooltip("T" + (i + 1), { direction: "top", offset: [0, -4] }));
+      });
+    }
     const m = L.marker(it.centroid, { icon: manualIcon() });
     m.bindPopup(popupHtml(it));
     g.addLayer(m);
@@ -93,9 +127,10 @@
       id: "m" + Date.now() + Math.floor(performance.now() % 1000),
       tesis_adi: ad, il: $("ca_il").value.trim(), ilce: $("ca_ilce").value.trim(),
       kaynak_turu: $("ca_kaynak").value, lisans_tipi: $("ca_lt").value,
-      polygon_wgs84: geom.polygon_wgs84, turbine_points: geom.turbine_points,
       centroid: geom.centroid, durum: geom.durum,
     };
+    if (geom.shapes) item.shapes = geom.shapes;                 // KMZ: renkli sekiller
+    else { item.polygon_wgs84 = geom.polygon_wgs84; item.turbine_points = geom.turbine_points; }
     const items = getItems(); items.push(item); setItems(items);
     drawItem(item);
     if (typeof map !== "undefined") map.setView(item.centroid, 13);
@@ -119,7 +154,8 @@
       const d = await r.json();
       if (!r.ok) { setMsg("Hata: " + (d.detail || r.status), false); return; }
       const it = commitItem(d, null);
-      setMsg(`Eklendi ✓ (${it.polygon_wgs84 ? it.polygon_wgs84.length : 0} halka, ${it.turbine_points ? it.turbine_points.length : 0} türbin)`, true);
+      const c = counts(it);
+      setMsg(`Eklendi ✓ (${c.poly} poligon, ${c.pt} nokta)`, true);
       $("ca_poly").value = ""; $("ca_turb").value = "";
       setTimeout(closeModal, 1100);
     } catch (e) {
@@ -138,7 +174,8 @@
       if (!r.ok) { setMsg("Hata: " + (d.detail || r.status), false); return; }
       const fallback = d.name || f.name.replace(/\.(kmz|kml)$/i, "");
       const it = commitItem(d, fallback);
-      setMsg(`KMZ eklendi ✓ (${it.polygon_wgs84 ? it.polygon_wgs84.length : 0} halka, ${it.turbine_points ? it.turbine_points.length : 0} nokta)`, true);
+      const c = counts(it);
+      setMsg(`KMZ eklendi ✓ (${c.poly} poligon${c.line ? `, ${c.line} çizgi` : ""}, ${c.pt} nokta)`, true);
       $("ca_kmz").value = "";
       setTimeout(closeModal, 1200);
     } catch (e) {
