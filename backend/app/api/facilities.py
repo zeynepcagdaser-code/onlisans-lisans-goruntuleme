@@ -524,10 +524,27 @@ def _stylemap_normal(sm_el):
     return None
 
 
+def _kml_root(kml_bytes):
+    """KML baytlarini dayanikli sekilde parse et: BOM, bastaki bosluk, kodlama-
+    bildirimi (Unicode+encoding) ve namespace tuhafliklarina ragmen calisir."""
+    if kml_bytes[:3] == b"\xef\xbb\xbf":          # UTF-8 BOM
+        kml_bytes = kml_bytes[3:]
+    kml_bytes = kml_bytes.lstrip()                # <?xml oncesi bosluk/newline
+    try:
+        return ET.fromstring(kml_bytes)
+    except ET.ParseError:
+        # bazi KMZ'ler bozuk/eksik namespace ya da kodlama bildirimiyle gelir:
+        # metne cevir, XML bildirimini at, yeniden dene.
+        import re
+        text = kml_bytes.decode("utf-8", "ignore")
+        text = re.sub(r"^\s*<\?xml[^>]*\?>", "", text, count=1).lstrip()
+        return ET.fromstring(text)
+
+
 def _parse_kml(kml_bytes):
     """KML -> (isim, sekil-listesi). Her sekil KENDI rengini tasir (KMZ'deki gibi).
     sekil = {kind:'polygon'|'line'|'point', ...geometri..., stroke/fill/fillOpacity}."""
-    root = ET.fromstring(kml_bytes)
+    root = _kml_root(kml_bytes)
     styles, stylemaps = {}, {}
     for el in root.iter():
         ln = _kml_local(el.tag)
@@ -604,14 +621,20 @@ async def import_kmz(file: UploadFile = File(...)):
                 kmls = [n for n in z.namelist() if n.lower().endswith(".kml")]
                 if not kmls:
                     raise HTTPException(400, "KMZ icinde .kml bulunamadi")
+                # doc.kml varsa onu tercih et (ana dosya); yoksa ilk .kml
+                kmls.sort(key=lambda n: (not n.lower().endswith("doc.kml"), n.lower()))
                 kml_bytes = z.read(kmls[0])
         else:                                        # duz KML (xml)
             kml_bytes = data
         name, shapes = _parse_kml(kml_bytes)
     except HTTPException:
         raise
+    except ET.ParseError as e:
+        raise HTTPException(400, f"KML XML olarak okunamadi (bozuk/gecersiz olabilir): {str(e)[:150]}")
+    except zipfile.BadZipFile:
+        raise HTTPException(400, "KMZ dosyasi bozuk (gecerli bir zip degil)")
     except Exception as e:
-        raise HTTPException(400, f"KMZ/KML okunamadi: {str(e)[:120]}")
+        raise HTTPException(400, f"KMZ/KML okunamadi ({type(e).__name__}): {str(e)[:150]}")
 
     if not shapes:
         raise HTTPException(400, "Dosyada koordinat (poligon/cizgi/nokta) bulunamadi")
