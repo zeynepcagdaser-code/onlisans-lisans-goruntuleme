@@ -554,7 +554,9 @@ def _kml_root(kml_bytes):
     used = (set(re.findall(r"</?([A-Za-z_][\w.\-]*):", text))
             | set(re.findall(r"[\s\"']([A-Za-z_][\w.\-]*):[\w.\-]+\s*=", text)))
     declared = set(re.findall(r"xmlns:([\w.\-]+)\s*=", text))
-    missing = [p for p in (used - declared) if p != "xml"]
+    # 'xmlns' ve 'xml' REZERVE oneklerdir; xmlns:X= yazimindan yanlislikla 'xmlns'
+    # yakalanabilir -> onlari asla enjekte etme (aksi halde 'reserved prefix' hatasi).
+    missing = [p for p in (used - declared) if p not in ("xml", "xmlns")]
     if missing:
         inject = "".join(
             f' xmlns:{p}="{_KNOWN_NS.get(p, "http://unknown.invalid/" + p)}"'
@@ -565,10 +567,39 @@ def _kml_root(kml_bytes):
     return ET.fromstring(text)
 
 
+def _parse_kml_regex(kml_bytes):
+    """SON CARE: XML hic parse edilemezse (cok bozuk KML) koordinatlari duz REGEX
+    ile cek. Renk/stil kaybolur ama sekiller yine de haritaya gelir."""
+    text = kml_bytes.decode("utf-8", "ignore")
+    shapes = []
+    for m in re.finditer(r"<Point\b.*?<coordinates>(.*?)</coordinates>", text, re.S | re.I):
+        p = _kml_coords(m.group(1))
+        if p:
+            shapes.append({"kind": "point", "coord": p[0], "color": None, "label": None})
+    for m in re.finditer(r"<LineString\b.*?<coordinates>(.*?)</coordinates>", text, re.S | re.I):
+        p = _kml_coords(m.group(1))
+        if len(p) >= 2:
+            shapes.append({"kind": "line", "coords": p, "stroke": None, "label": None})
+    for m in re.finditer(r"<Polygon\b(.*?)</Polygon>", text, re.S | re.I):
+        rings = []
+        for cm in re.finditer(r"<coordinates>(.*?)</coordinates>", m.group(1), re.S | re.I):
+            r = _kml_coords(cm.group(1))
+            if len(r) >= 3:
+                rings.append(r)
+        if rings:
+            shapes.append({"kind": "polygon", "rings": rings, "stroke": None,
+                           "fill": None, "fillOpacity": None, "label": None})
+    nm = re.search(r"<name>(.*?)</name>", text, re.S | re.I)
+    return (nm.group(1).strip() if nm else None), shapes
+
+
 def _parse_kml(kml_bytes):
     """KML -> (isim, sekil-listesi). Her sekil KENDI rengini tasir (KMZ'deki gibi).
     sekil = {kind:'polygon'|'line'|'point', ...geometri..., stroke/fill/fillOpacity}."""
-    root = _kml_root(kml_bytes)
+    try:
+        root = _kml_root(kml_bytes)
+    except Exception:
+        return _parse_kml_regex(kml_bytes)      # XML parse edilemedi -> son care
     styles, stylemaps = {}, {}
     for el in root.iter():
         ln = _kml_local(el.tag)
