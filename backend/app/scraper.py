@@ -184,25 +184,39 @@ class EpdkScraper:
 
     # ---- adimlar ----
     def select_filters(self) -> bool:
-        """Lisans Durumu = Yururlukte (ONAYLANDI). force-click + dogrulama + retry.
-        Basarisizsa kullaniciyi ELLE secmeye yonlendirir (buyuk uyari)."""
+        """Lisans Durumu'nu settings.lisans_durumu'na gore sec (METNE gore -> her durum
+        icin calisir). Bos ise durum secmez (TUM durumlar gelir). Basarisizsa kullaniciyi
+        ELLE secmeye yonlendirir."""
+        durum = (getattr(settings, "lisans_durumu", "") or "").strip()
+        if not durum:                        # bos -> durum secme (tum durumlar)
+            self.cb.log("Lisans Durumu: secilmedi (TUM durumlar gelecek)")
+            return True
         for attempt in range(3):
             try:
                 self.page.wait_for_selector(DURUM_TRIGGER, timeout=8000)
                 time.sleep(0.3)
-                self.page.click(DURUM_TRIGGER, force=True, timeout=6000)
-                time.sleep(0.5)
-                self.page.click(DURUM_ONAYLANDI, force=True, timeout=5000)
-                time.sleep(0.3)
-                lbl = self.page.eval_on_selector(DURUM_LABEL, "e => e ? e.innerText : ''") or ""
-                if "rürlükte" in lbl or "rurlukte" in lbl.lower():
-                    self.cb.log(f"Lisans Durumu -> {lbl}")
-                    return True
+                self.page.click(DURUM_TRIGGER, force=True, timeout=6000)   # menuyu ac
+                time.sleep(0.6)
+                secildi = False
+                try:                         # 1) METNE gore sec (herhangi bir durum)
+                    self.page.locator("li.ui-selectonemenu-item",
+                                      has_text=durum).first.click(timeout=3500)
+                    secildi = True
+                except Exception:            # 2) Yururlukte icin eski index yedegi
+                    if "rürlükte" in durum or "rurlukte" in durum.lower():
+                        self.page.click(DURUM_ONAYLANDI, force=True, timeout=4000)
+                        secildi = True
+                if secildi:
+                    time.sleep(0.3)
+                    lbl = self.page.eval_on_selector(DURUM_LABEL, "e => e ? e.innerText : ''") or ""
+                    if lbl.strip():
+                        self.cb.log(f"Lisans Durumu -> {lbl}")
+                        return True
             except Exception as e:
                 self.cb.log(f"[!] Durum secme deneme {attempt+1}: {str(e)[:60]}")
             time.sleep(1.0)
-        self.cb.log("[!!] Yururlukte OTOMATIK secilemedi -> LUTFEN acilan pencerede "
-                    "acilir menuden ELLE 'Yururlukte' sec, SONRA Sorgula'ya bas.")
+        self.cb.log(f"[!!] '{durum}' OTOMATIK secilemedi -> acilan pencerede acilir menuden "
+                    f"ELLE '{durum}' secip Sorgula'ya basin.")
         return False
 
     def reauth_navigate(self):

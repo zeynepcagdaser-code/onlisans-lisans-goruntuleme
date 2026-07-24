@@ -57,12 +57,16 @@ def main():
         log("[!] Sonuc gelmedi."); sc.close(); db.close(); return
     sc.set_rows_per_page()
     total_pg = sc.total_pages()
-    # GUVENLIK: Yururlukte secili degilse TUM durumlar gelir (~69 sayfa) -> yanlis
-    # tesisler + ilerleme dosyasi (40-sayfa duzenine gore) bozulur. DUR.
-    if total_pg > 45:
-        log(f"[!] {total_pg} sayfa geldi (beklenen ~40). Lisans Durumu 'YURURLUKTE' "
-            f"SECILI DEGIL -> tum durumlar geldi. DURULUYOR. Pencerede 'Yururlukte' "
-            f"secip Sorgula'ya basip yeniden baslatin.")
+    # GUVENLIK: SADECE 'Yururlukte' hedeflenirken >45 sayfa = durum secilmemis demek
+    # (~69 sayfa/tum durumlar) -> ilerleme dosyasi (40-sayfa duzenine gore) bozulur. DUR.
+    # Baska bir durum (or. 'Hepsi'/'Sona Ermis') KASITLI secildiyse cok sayfa NORMALDIR.
+    from app.config import settings as _st
+    _durum = (_st.lisans_durumu or "").strip().lower()
+    _yururlukte = ("rürlükte" in _durum or "rurlukte" in _durum)
+    if _yururlukte and total_pg > 45:
+        log(f"[!] {total_pg} sayfa geldi (Yururlukte icin beklenen ~40). Durum SECILI "
+            f"DEGIL gibi -> tum durumlar geldi. DURULUYOR. Pencerede 'Yururlukte' secip "
+            f"Sorgula'ya basip yeniden baslatin.")
         sc.close(); db.close(); return
     tamamlanan = _oku_ilerleme()
     log(f"Toplam {total_pg} sayfa. SON sayfadan GERIYE cekiliyor. "

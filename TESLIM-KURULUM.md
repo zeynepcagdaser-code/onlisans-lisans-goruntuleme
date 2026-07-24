@@ -82,6 +82,20 @@ python -c "import sqlite3;c=sqlite3.connect('data/epdk.db');c.execute('PRAGMA wa
 
 ---
 
+## Lisans durumu seçimi (çekimde)
+
+Varsayılan olarak **yalnızca "Yürürlükte"** lisanslar çekilir. Başka durum(lar) çekmek için
+(çekimi yapan PC'de) `backend/.env` dosyasına ekleyin:
+```
+# Tek durum:
+LISANS_DURUMU=Sona Ermiş
+# ya da tüm durumlar (boş bırak):
+LISANS_DURUMU=
+```
+Değerler EPDK menüsündeki metinle eşleşir (Yürürlükte / Sona Ermiş / İptal Edilmiş ...).
+Ayrıca çekim sırasında açılan tarayıcıda **"Lisans Durumu" menüsünden elle de** seçebilirsiniz
+(otomatik seçim başarısız olursa uyarı verir ve elle seçmenizi ister).
+
 ## Notlar
 - **Güvenlik:** `/yonetim` şifrelidir; `.env`'deki `ADMIN_PASSWORD`'u güçlü tutun. Sadece yükleme
   yapan kişi bilmeli.

@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
 
     # Scraper
+    # Cekilecek lisans durumu (EPDK 'Lisans Durumu' menusu). Varsayilan 'Yürürlükte'.
+    # Digerleri: 'Sona Ermiş', 'İptal Edilmiş', 'Sonlandırılmış' ... ya da 'Hepsi'
+    # (bos birak -> durum secilmez, TUM durumlar gelir). Metne gore secilir.
+    lisans_durumu: str = "Yürürlükte"
     headless: bool = False           # captcha icin normalde headed
     rows_per_page: int = 50          # rpp=50 -> daha az postback
     request_delay_ms: int = 400      # istekler arasi nezaket gecikmesi
