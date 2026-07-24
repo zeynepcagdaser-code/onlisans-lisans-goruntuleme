@@ -8,7 +8,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from .config import BASE_DIR
+from .config import BASE_DIR, settings
 from .database import init_db
 from .api import admin, facilities
 
@@ -62,7 +62,9 @@ if FRONTEND_DIR.exists():
     def harita():
         return FileResponse(str(FRONTEND_DIR / "harita.html"))
 
-    @app.get("/yonetim")
+    # Admin sayfasi GIZLI adreste (config.admin_path / .env ADMIN_PATH). Menude link
+    # YOK + adres gizli -> sadece adresi bilen (siz) ulasir. Ayrica sifreli.
+    @app.get("/" + settings.admin_path.strip("/"))
     def yonetim():
         return FileResponse(str(FRONTEND_DIR / "admin.html"))
 

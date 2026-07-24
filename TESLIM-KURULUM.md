@@ -33,12 +33,17 @@ pip install -r requirements-web.txt
 ```
 > `requirements-web.txt` HAFİF sürümdür (Playwright YOK — sunucuda çekim yapılmaz, sadece görüntüleme).
 
-**3. Yönetici şifresini AYARLAYIN** (GÜVENLİK — zorunlu):
+**3. Yönetici şifresini + gizli admin adresini AYARLAYIN** (GÜVENLİK — zorunlu):
 `backend/.env` dosyası oluşturun:
 ```
 ADMIN_PASSWORD=buraya-guclu-bir-sifre
+ADMIN_PATH=gizli-veri-x7k2m
 ```
-> Ayarlamazsanız varsayılan `degistir-beni` olur — mutlaka değiştirin.
+- **ADMIN_PASSWORD:** veri yükleme sayfasının şifresi. Ayarlamazsanız varsayılan `degistir-beni` olur — mutlaka değiştirin.
+- **ADMIN_PATH:** veri yükleme sayfasının **gizli adresi**. Tahmin edilemez bir şey yapın
+  (ör. `gizli-veri-x7k2m`). Böylece sayfa `harita.selenkaenerji.com/gizli-veri-x7k2m` adresinde
+  olur; `/yonetim` yazan biri **404** görür (hiçbir şey bulamaz). Menüde de link yoktur.
+  Bu adresi + şifreyi **sadece veri yükleyecek kişi** bilmeli.
 
 **4. Uygulamayı çalıştırın** (kalıcı servis olarak — systemd / IIS reverse-proxy / nssm):
 ```bash

@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # Yonetim (admin 'Veri Yukle' sayfasi). GUVENLIK: canliya kurunca .env'de
     # ADMIN_PASSWORD'u MUTLAKA guclu bir sifreyle degistirin.
     admin_password: str = "degistir-beni"
+    # Admin sayfasinin GIZLI ADRESI (yol). Menude link yok; ustelik yol da gizli
+    # olsun ki '/yonetim' yazan biri hicbir sey bulamasin. .env'de ADMIN_PATH ile
+    # tahmin edilemez bir sey yapin (or. 'gizli-veri-x7k2m'). Sadece siz bilin.
+    admin_path: str = "yonetim"
 
     # Zamanlayici
     sync_hour: int = 8
