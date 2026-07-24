@@ -661,6 +661,116 @@ def _parse_kml(kml_bytes):
     return name, shapes
 
 
+def _polygon_area_ha(rings):
+    """WGS84 halka listesinin alanini HEKTAR olarak (UTM'e projelendirip shoelace;
+    ilk halka dis sinir, digerleri delik)."""
+    if not rings or len(rings[0]) < 3:
+        return None
+    from pyproj import Transformer
+    outer = rings[0]
+    lon0 = sum(p[1] for p in outer) / len(outer)
+    lat0 = sum(p[0] for p in outer) / len(outer)
+    zone = int((lon0 + 180) / 6) + 1
+    epsg = (32600 if lat0 >= 0 else 32700) + zone
+    tf = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True)
+
+    def shoelace(ring):
+        xy = [tf.transform(p[1], p[0]) for p in ring]
+        a = 0.0
+        for i in range(len(xy)):
+            x0, y0 = xy[i]
+            x1, y1 = xy[(i + 1) % len(xy)]
+            a += x0 * y1 - x1 * y0
+        return abs(a) / 2
+
+    try:
+        area = shoelace(outer) - sum(shoelace(r) for r in rings[1:] if len(r) >= 3)
+        return round(area / 10000.0, 1)
+    except Exception:
+        return None
+
+
+def _kml_tree(kml_bytes):
+    """KML -> (dokuman_adi, agac). Klasor hiyerarsisini KORUR (Google Earth 'Yerler').
+    dugum: {type:'folder',name,children} | {type:'placemark',name,shapes,area_ha}."""
+    root = _kml_root(kml_bytes)
+    styles, stylemaps = {}, {}
+    for el in root.iter():
+        ln = _kml_local(el.tag)
+        if ln == "Style" and el.get("id"):
+            styles["#" + el.get("id")] = _extract_style(el)
+        elif ln == "StyleMap" and el.get("id"):
+            n = _stylemap_normal(el)
+            if n:
+                stylemaps["#" + el.get("id")] = n
+
+    def resolve(url):
+        seen = set()
+        while url in stylemaps and url not in seen:
+            seen.add(url); url = stylemaps[url]
+        return styles.get(url, {})
+
+    def name_of(el):
+        for ch in el:
+            if _kml_local(ch.tag) == "name" and ch.text and ch.text.strip():
+                return ch.text.strip()
+        return None
+
+    def pm_shapes(pm):
+        style = {}
+        for ch in pm:
+            l = _kml_local(ch.tag)
+            if l == "styleUrl" and ch.text:
+                style = resolve(ch.text.strip())
+            elif l == "Style":
+                style = _extract_style(ch)
+        stroke, fill, fopac = style.get("stroke"), style.get("fill"), style.get("fillOpacity")
+        out = []
+        for geo in pm.iter():
+            gl = _kml_local(geo.tag)
+            if gl == "Polygon":
+                rings = []
+                for lr in geo.iter():
+                    if _kml_local(lr.tag) == "LinearRing":
+                        c = _child_coords(lr)
+                        if c and len(c) >= 3:
+                            rings.append(c)
+                if rings:
+                    out.append({"kind": "polygon", "rings": rings, "stroke": stroke or fill,
+                                "fill": fill or stroke, "fillOpacity": fopac})
+            elif gl == "LineString":
+                c = _child_coords(geo)
+                if c and len(c) >= 2:
+                    out.append({"kind": "line", "coords": c, "stroke": stroke or fill})
+            elif gl == "Point":
+                c = _child_coords(geo)
+                if c:
+                    out.append({"kind": "point", "coord": c[0], "color": stroke or fill})
+        return out
+
+    def walk(el):
+        nodes = []
+        for ch in el:
+            l = _kml_local(ch.tag)
+            if l in ("Folder", "Document"):
+                nodes.append({"type": "folder", "name": name_of(ch) or l, "children": walk(ch)})
+            elif l == "Placemark":
+                shp = pm_shapes(ch)
+                if not shp:
+                    continue
+                area = None
+                for s in shp:
+                    if s["kind"] == "polygon":
+                        a = _polygon_area_ha(s["rings"])
+                        if a:
+                            area = round((area or 0) + a, 1)
+                nodes.append({"type": "placemark", "name": name_of(ch) or "(isimsiz)",
+                              "shapes": shp, "area_ha": area})
+        return nodes
+
+    return name_of(root), walk(root)
+
+
 @router.post("/import-kmz")
 async def import_kmz(file: UploadFile = File(...)):
     """KMZ/KML dosyasini ayristir -> WGS84 halka/nokta doner. KAYDETMEZ (yalnizca
@@ -681,33 +791,47 @@ async def import_kmz(file: UploadFile = File(...)):
                 kml_bytes = z.read(kmls[0])
         else:                                        # duz KML (xml)
             kml_bytes = data
-        name, shapes = _parse_kml(kml_bytes)
+        try:
+            doc_name, tree = _kml_tree(kml_bytes)     # klasor agacini KORU
+        except Exception:
+            # XML hic parse edilemedi -> duz regex, tek duz liste
+            nm, flat = _parse_kml_regex(kml_bytes)
+            tree = [{"type": "placemark", "name": (s.get("label") or "(sekil)"),
+                     "shapes": [s],
+                     "area_ha": (_polygon_area_ha(s["rings"]) if s["kind"] == "polygon" else None)}
+                    for s in flat]
+            doc_name = nm
     except HTTPException:
         raise
-    except ET.ParseError as e:
-        raise HTTPException(400, f"KML XML olarak okunamadi (bozuk/gecersiz olabilir): {str(e)[:150]}")
     except zipfile.BadZipFile:
         raise HTTPException(400, "KMZ dosyasi bozuk (gecerli bir zip degil)")
     except Exception as e:
         raise HTTPException(400, f"KMZ/KML okunamadi ({type(e).__name__}): {str(e)[:150]}")
 
-    if not shapes:
+    allpts = []
+
+    def _collect(nodes):
+        for n in nodes:
+            if n["type"] == "folder":
+                _collect(n["children"])
+            else:
+                for s in n["shapes"]:
+                    if s["kind"] == "polygon":
+                        allpts.extend(p for r in s["rings"] for p in r)
+                    elif s["kind"] == "line":
+                        allpts.extend(s["coords"])
+                    elif s["kind"] == "point":
+                        allpts.append(s["coord"])
+    _collect(tree)
+    if not allpts:
         raise HTTPException(400, "Dosyada koordinat (poligon/cizgi/nokta) bulunamadi")
 
-    allpts = []
-    for s in shapes:
-        if s["kind"] == "polygon":
-            allpts += [p for r in s["rings"] for p in r]
-        elif s["kind"] == "line":
-            allpts += s["coords"]
-        elif s["kind"] == "point":
-            allpts.append(s["coord"])
     clat = sum(p[0] for p in allpts) / len(allpts)
     clng = sum(p[1] for p in allpts) / len(allpts)
     supheli = not all(in_turkey(la, ln) for la, ln in allpts)
     return {
-        "name": name,
-        "shapes": shapes,                            # her sekil KENDI rengiyle
+        "name": doc_name,
+        "tree": tree,                                # Google Earth 'Yerler' agaci
         "centroid": [round(clat, 6), round(clng, 6)],
         "durum": "supheli" if supheli else "ok",
     }
