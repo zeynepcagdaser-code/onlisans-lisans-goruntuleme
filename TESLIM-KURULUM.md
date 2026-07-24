@@ -87,6 +87,40 @@ python -c "import sqlite3;c=sqlite3.connect('data/epdk.db');c.execute('PRAGMA wa
 
 ---
 
+## Otomatik güncelleme (opsiyonel — "push → canlı", Render gibi)
+
+Kullanıcı repoya `git push` yapınca sitenin **kendiliğinden güncellenmesi** isteniyorsa
+(Render'daki gibi), sunucuda şu yöntemlerden biri kurulur (IT tercih eder):
+
+**Yöntem 1 — Zamanlı `git pull` (en basit, önerilen):**
+Sunucuda küçük bir betik + zamanlanmış görev; birkaç dakikada bir repoyu kontrol eder,
+değişiklik varsa çeker ve uygulamayı yeniden başlatır.
+
+Linux (betik `guncelle.sh` + cron `*/5 * * * *`):
+```bash
+cd /opt/onlisans-lisans-goruntuleme
+git fetch origin main
+if ! git diff --quiet HEAD origin/main; then
+  git pull
+  pip install -r backend/requirements-web.txt   # bağımlılık değiştiyse
+  systemctl restart epdk-harita                  # uygulamayı yeniden başlat
+fi
+```
+
+Windows (Görev Zamanlayıcı + `guncelle.bat`, 5 dakikada bir):
+```bat
+cd C:\apps\onlisans-lisans-goruntuleme
+git pull
+nssm restart epdk-harita
+```
+
+**Yöntem 2 — GitHub Webhook (anında):**
+GitHub, push olunca sunucudaki küçük bir uç noktaya haber verir; o da `git pull` + yeniden
+başlatma yapar. Anında güncellenir ama biraz daha kurulum ister (webhook dinleyici).
+
+> Not: Bu yöntemde **veri de** repo ile gider (kullanıcı `epdk.db`'yi commit + push eder).
+> Ayrı `/yonetim` yüklemesine gerek kalmaz — kullanıcı her şeyi tek `git push` ile yayınlar.
+
 ## Lisans durumu seçimi (çekimde)
 
 Varsayılan olarak **yalnızca "Yürürlükte"** lisanslar çekilir. Başka durum(lar) çekmek için
