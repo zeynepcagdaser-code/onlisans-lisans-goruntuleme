@@ -6,17 +6,36 @@
   const DRAWN_KEY = "cizimlerim_v1";
   const drawn = new L.FeatureGroup().addTo(map);
 
-  // --- Cizim araclari (sol-ust) ---
-  map.pm.addControls({
-    position: "topleft",
-    drawMarker: true, drawPolygon: true, drawPolyline: true, drawRectangle: true,
-    drawCircle: false, drawCircleMarker: false, drawText: false,
-    editMode: true, dragMode: true, removalMode: true, cutPolygon: false, rotateMode: false,
-  });
+  // Geoman'in KENDI (dikey) arac cubugunu KULLANMA; yatay ozel toolbar (#drawTools) baglariz.
   map.pm.setGlobalOptions({ layerGroup: drawn });
-  try {
-    map.pm.setLang("tr");            // Geoman'da Turkce varsa
-  } catch (e) {}
+  try { map.pm.setLang("tr"); } catch (e) {}
+
+  // --- Yatay ozel cizim arac cubugu (#drawTools) -> Geoman metodlari ---
+  (function () {
+    const bar = document.getElementById("drawTools");
+    if (!bar) return;
+    const btns = Array.from(bar.querySelectorAll("button"));
+    function clearActive() { btns.forEach((b) => b.classList.remove("active")); }
+    function disableAll() {
+      try { map.pm.disableDraw(); } catch (e) {}
+      try { if (map.pm.globalEditModeEnabled()) map.pm.disableGlobalEditMode(); } catch (e) {}
+      try { if (map.pm.globalDragModeEnabled()) map.pm.disableGlobalDragMode(); } catch (e) {}
+      try { if (map.pm.globalRemovalModeEnabled()) map.pm.disableGlobalRemovalMode(); } catch (e) {}
+    }
+    btns.forEach((btn) => {
+      btn.onclick = () => {
+        const act = btn.dataset.act;
+        const wasActive = btn.classList.contains("active");
+        disableAll(); clearActive();
+        if (act === "cancel" || wasActive) return;      // ikinci tik / bitir -> kapat
+        btn.classList.add("active");
+        if (["Marker", "Polygon", "Line", "Rectangle"].indexOf(act) >= 0) map.pm.enableDraw(act);
+        else if (act === "edit") map.pm.enableGlobalEditMode();
+        else if (act === "drag") map.pm.enableGlobalDragMode();
+        else if (act === "remove") map.pm.enableGlobalRemovalMode();
+      };
+    });
+  })();
 
   function persist() {
     try { localStorage.setItem(DRAWN_KEY, JSON.stringify(drawn.toGeoJSON())); } catch (e) {}

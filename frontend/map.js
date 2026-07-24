@@ -1,6 +1,7 @@
 // Harita: Leaflet + markercluster, kaynak turune gore renk, lejant toggle,
 // poligon katmani, kebab menulu tesis karti (koordinat/KMZ indirme).
 const map = L.map("map").setView([39.0, 35.0], 6);
+map.zoomControl.setPosition("topright");   // zoom -> sag-ust (Google Earth gibi)
 
 // Renkli daire ikon (markerCluster L.marker'i destekler; circleMarker'da popup sorunlu)
 const _iconCache = {};
