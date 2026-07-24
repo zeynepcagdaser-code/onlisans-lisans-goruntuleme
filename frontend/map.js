@@ -47,7 +47,7 @@ function updateHiddenPanel() {
   const rows = [...hiddenIds].map(id =>
     `<div class="hp-row"><span title="${byId[id] || id}">${byId[id] || ("Tesis " + id)}</span>`
     + `<button onclick="unhideFacility('${id}')">geri getir</button></div>`).join("");
-  el.style.display = "";
+  el.style.display = "block";     // "" yaparsak CSS'teki 'display:none' geri gelir -> gizli kalirdi
   el.innerHTML = `<div class="hp-hd">🚫 Gizlenen (${hiddenIds.size})`
     + `<button onclick="unhideAll()">hepsini geri getir</button></div>${rows}`;
 }
