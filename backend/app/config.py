@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     # Veritabani
     database_url: str = f"sqlite:///{(BASE_DIR / 'data' / 'epdk.db').as_posix()}"
 
+    # Yonetim (admin 'Veri Yukle' sayfasi). GUVENLIK: canliya kurunca .env'de
+    # ADMIN_PASSWORD'u MUTLAKA guclu bir sifreyle degistirin.
+    admin_password: str = "degistir-beni"
+
     # Zamanlayici
     sync_hour: int = 8
     sync_minute: int = 30

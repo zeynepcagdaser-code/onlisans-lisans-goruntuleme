@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 
 from .config import BASE_DIR
 from .database import init_db
-from .api import facilities
+from .api import admin, facilities
 
 FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
@@ -42,6 +42,7 @@ app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 app.include_router(facilities.router)
+app.include_router(admin.router)          # sifreli 'Veri Yukle' (her ortamda)
 if _SCRAPER_OK:
     app.include_router(sync_api.router)
 
@@ -60,5 +61,9 @@ if FRONTEND_DIR.exists():
     @app.get("/harita")
     def harita():
         return FileResponse(str(FRONTEND_DIR / "harita.html"))
+
+    @app.get("/yonetim")
+    def yonetim():
+        return FileResponse(str(FRONTEND_DIR / "admin.html"))
 
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")

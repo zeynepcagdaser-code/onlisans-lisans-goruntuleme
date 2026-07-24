@@ -201,6 +201,20 @@ def _disk_file(cache_key, sig):
     return os.path.join(_CACHE_DIR, ad)
 
 
+def reset_geojson_cache():
+    """DB degistiginde (admin 'Veri Yukle') onbellegi sifirla: imza + bellek onbellegi
+    + disk paketleri temizlenir -> sonraki istek yeni veriyle yeniden uretir."""
+    global _DB_SIG
+    _DB_SIG = None
+    _GEOJSON_CACHE.clear()
+    try:
+        import glob
+        for f in glob.glob(os.path.join(_CACHE_DIR, "*.gz")):
+            os.remove(f)
+    except Exception:
+        pass
+
+
 @router.get("/geojson")
 def facilities_geojson(
     db: Session = Depends(get_db),

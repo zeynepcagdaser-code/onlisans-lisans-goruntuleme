@@ -22,3 +22,9 @@ backend/.env
 
 # Playwright
 .playwright/
+
+backend/data/*.yedek
+backend/data/*.yeni
+backend/data/*.db-wal
+backend/data/*.db-shm
+backend/.env

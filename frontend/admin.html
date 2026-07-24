@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Yönetim — Veri Yükle</title>
+  <link rel="stylesheet" href="/static/style.css?v=9" />
+  <style>
+    .wrap { max-width: 620px; margin: 30px auto; padding: 0 16px; }
+    .box { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 22px; box-shadow: 0 2px 12px rgba(0,0,0,.08); margin-bottom: 18px; }
+    .box h2 { margin: 0 0 6px; font-size: 18px; }
+    .box p { color: var(--muted); font-size: 13px; margin: 4px 0 14px; }
+    label.fld { display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
+    input[type=password], input[type=file] { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+    button.primary { background: var(--head2); color: #fff; border: none; border-radius: 9px; padding: 11px 22px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 14px; }
+    button.primary:disabled { opacity: .6; cursor: default; }
+    .msg { font-size: 13px; margin-top: 12px; }
+    .steps { font-size: 13px; color: var(--ink); line-height: 1.7; }
+    .steps code { background: #f1f5f9; padding: 1px 6px; border-radius: 5px; }
+    .hidden { display: none; }
+    .ok { color: #16a34a; } .err { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <h1>EPDK Lisans Görüntüleme — Yönetim</h1>
+    <nav><a href="/harita">Harita</a><a href="/">Tablo</a></nav>
+  </header>
+
+  <div class="wrap">
+    <!-- Giris -->
+    <div class="box" id="loginBox">
+      <h2>🔒 Yönetici Girişi</h2>
+      <p>Veri güncellemek için yönetici şifresi gerekir.</p>
+      <label class="fld">Şifre</label>
+      <input type="password" id="pw" placeholder="Yönetici şifresi" />
+      <button class="primary" id="loginBtn">Gir</button>
+      <div class="msg" id="loginMsg"></div>
+    </div>
+
+    <!-- Yukleme -->
+    <div class="box hidden" id="uploadBox">
+      <h2>⬆️ Veri Yükle (epdk.db)</h2>
+      <p>Bilgisayarında çektiğin güncel <code>epdk.db</code> dosyasını seç ve yükle. Site yeni veriyi anında gösterir.</p>
+      <label class="fld">Veritabanı dosyası (.db)</label>
+      <input type="file" id="dbFile" accept=".db,.sqlite,.sqlite3" />
+      <button class="primary" id="uploadBtn">Yükle ve Yayınla</button>
+      <div class="msg" id="upMsg"></div>
+    </div>
+
+    <!-- Aylik akis -->
+    <div class="box">
+      <h2>📋 Aylık güncelleme adımları</h2>
+      <div class="steps">
+        <b>1.</b> Kendi bilgisayarında çekim aracını çalıştır → captcha'yı çöz → <code>backend/data/epdk.db</code> güncellenir.<br>
+        <b>2.</b> Bu sayfaya gel, şifreyle gir.<br>
+        <b>3.</b> Güncellenen <code>epdk.db</code>'yi seç → <b>Yükle ve Yayınla</b>.<br>
+        <b>4.</b> Site herkese güncel veriyi gösterir. ✓
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let PW = "";
+    async function login() {
+      const pw = $("pw").value;
+      if (!pw) { $("loginMsg").textContent = "Şifre girin."; $("loginMsg").className = "msg err"; return; }
+      const fd = new FormData(); fd.append("password", pw);
+      try {
+        const r = await fetch("/api/admin/dogrula", { method: "POST", body: fd });
+        if (!r.ok) { $("loginMsg").textContent = "Şifre yanlış."; $("loginMsg").className = "msg err"; return; }
+        PW = pw;
+        $("loginBox").classList.add("hidden");
+        $("uploadBox").classList.remove("hidden");
+      } catch (e) { $("loginMsg").textContent = "Bağlantı hatası: " + e.message; $("loginMsg").className = "msg err"; }
+    }
+    async function upload() {
+      const f = $("dbFile").files && $("dbFile").files[0];
+      if (!f) { $("upMsg").textContent = "Önce bir .db dosyası seçin."; $("upMsg").className = "msg err"; return; }
+      const btn = $("uploadBtn"); btn.disabled = true;
+      $("upMsg").textContent = "Yükleniyor ve doğrulanıyor…"; $("upMsg").className = "msg";
+      const fd = new FormData(); fd.append("file", f); fd.append("password", PW);
+      try {
+        const r = await fetch("/api/admin/upload-db", { method: "POST", body: fd });
+        const d = await r.json();
+        if (!r.ok) { $("upMsg").textContent = "Hata: " + (d.detail || r.status); $("upMsg").className = "msg err"; btn.disabled = false; return; }
+        $("upMsg").innerHTML = `✅ Yayınlandı! <b>${d.tesis_sayisi}</b> tesis (${d.koordinatli} koordinatlı). <a href="/harita">Haritada gör →</a>`;
+        $("upMsg").className = "msg ok";
+      } catch (e) { $("upMsg").textContent = "Yükleme hatası: " + e.message; $("upMsg").className = "msg err"; }
+      finally { btn.disabled = false; }
+    }
+    $("loginBtn").onclick = login;
+    $("pw").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
+    $("uploadBtn").onclick = upload;
+  </script>
+</body>
+</html>
