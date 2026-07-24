@@ -4,6 +4,7 @@ import gzip
 import io
 import json
 import os
+import re
 import xml.etree.ElementTree as ET
 import zipfile
 from typing import Optional
@@ -524,21 +525,44 @@ def _stylemap_normal(sm_el):
     return None
 
 
+_KNOWN_NS = {
+    "gx": "http://www.google.com/kml/ext/2.2",
+    "atom": "http://www.w3.org/2005/Atom",
+    "kml": "http://www.opengis.net/kml/2.2",
+    "xsi": "http://www.w3.org/2001/XMLSchema-instance",
+}
+
+
 def _kml_root(kml_bytes):
-    """KML baytlarini dayanikli sekilde parse et: BOM, bastaki bosluk, kodlama-
-    bildirimi (Unicode+encoding) ve namespace tuhafliklarina ragmen calisir."""
+    """KML baytlarini DAYANIKLI parse et: BOM, bastaki bosluk, kodlama-bildirimi ve
+    'unbound prefix' (tanimsiz namespace oneki, or. gx:/atom:) sorunlarina ragmen."""
     if kml_bytes[:3] == b"\xef\xbb\xbf":          # UTF-8 BOM
         kml_bytes = kml_bytes[3:]
-    kml_bytes = kml_bytes.lstrip()                # <?xml oncesi bosluk/newline
+    kml_bytes = kml_bytes.lstrip()
     try:
         return ET.fromstring(kml_bytes)
     except ET.ParseError:
-        # bazi KMZ'ler bozuk/eksik namespace ya da kodlama bildirimiyle gelir:
-        # metne cevir, XML bildirimini at, yeniden dene.
-        import re
-        text = kml_bytes.decode("utf-8", "ignore")
-        text = re.sub(r"^\s*<\?xml[^>]*\?>", "", text, count=1).lstrip()
+        pass
+    # metne cevir + XML bildirimini at (Unicode+encoding catismasini onler)
+    text = kml_bytes.decode("utf-8", "ignore")
+    text = re.sub(r"^\s*<\?xml[^>]*\?>", "", text, count=1).lstrip()
+    try:
         return ET.fromstring(text)
+    except ET.ParseError:
+        pass
+    # 'unbound prefix': kullanilan ama tanimsiz tum onekleri KOK etikete xmlns ekle
+    used = (set(re.findall(r"</?([A-Za-z_][\w.\-]*):", text))
+            | set(re.findall(r"[\s\"']([A-Za-z_][\w.\-]*):[\w.\-]+\s*=", text)))
+    declared = set(re.findall(r"xmlns:([\w.\-]+)\s*=", text))
+    missing = [p for p in (used - declared) if p != "xml"]
+    if missing:
+        inject = "".join(
+            f' xmlns:{p}="{_KNOWN_NS.get(p, "http://unknown.invalid/" + p)}"'
+            for p in missing)
+        # ilk gercek eleman (kok, or. <kml ...>) ac etiketine enjekte et
+        text = re.sub(r"<([A-Za-z_][\w.\-]*)(\s|>)",
+                      lambda m: f"<{m.group(1)}{inject}{m.group(2)}", text, count=1)
+    return ET.fromstring(text)
 
 
 def _parse_kml(kml_bytes):
